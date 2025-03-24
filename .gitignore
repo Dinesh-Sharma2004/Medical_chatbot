@@ -1,0 +1,25 @@
+# Ignore the virtual environment
+venv/
+.env
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore vector database
+vectorstore/
+
+# Ignore Streamlit cache
+.streamlit/
+
+# Ignore logs
+logs/
+*.log
+
+
