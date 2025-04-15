@@ -7,3 +7,4 @@ faiss-cpu
 sentence-transformers
 python-dotenv
 pypdf
+gunicorn
