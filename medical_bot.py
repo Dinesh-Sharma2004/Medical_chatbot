@@ -7,10 +7,13 @@ from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 
+# Load environment variables safely
 load_dotenv()
 
-HF_TOKEN = os.environ.get("HF_TOKEN")
-MODEL = os.environ.get("MODEL")
+# Environment variables
+HF_TOKEN = os.getenv("HF_TOKEN")
+MODEL = os.getenv("MODEL")
+REPO_ID = os.getenv("REPO_ID")
 DB_FAISS_PATH = "vectorstore/db_faiss"
 
 def get_vectorstore():
@@ -18,67 +21,66 @@ def get_vectorstore():
     return FAISS.load_local(DB_FAISS_PATH, embedding_model, allow_dangerous_deserialization=True)
     
 def set_custom_prompt(custom_prompt_template):
-    return PromptTemplate(template=custom_prompt_template, input_variable=["context", "question"])
+    return PromptTemplate(template=custom_prompt_template, input_variables=["context", "question"])
     
-def load_llm(repo_id, HF_TOKEN):
+def load_llm(repo_id, token):
     return HuggingFaceEndpoint(
         repo_id=repo_id,
         temperature=0.4,
-        model_kwargs={"token": HF_TOKEN, "max_length": "512"}
+        model_kwargs={"token": token, "max_length": 512}
     )
 
 def main():
-    st.title("Ask Me Anything About Anatomy and Forensics:")
-    
-    # Initialize session state for messages if not already set
+    st.set_page_config(page_title="Medical Chatbot", layout="wide")
+    st.title("🩺 Medical Chatbot — Ask About Anatomy & Forensics")
+
     if 'messages' not in st.session_state:
-        st.session_state["messages"] = []
-    
-    # Display previous messages
-    for message in st.session_state["messages"]:
+        st.session_state['messages'] = []
+
+    for message in st.session_state['messages']:
         st.chat_message(message['role']).markdown(message['content'])
-    
-    prompt = st.chat_input("Pass your prompt here:")
-    
+
+    prompt = st.chat_input("Ask a medical question...")
+
     if prompt:
         st.chat_message('user').markdown(prompt)
-        st.session_state["messages"].append({'role': 'user', 'content': prompt})
-        
+        st.session_state['messages'].append({'role': 'user', 'content': prompt})
+
         CUSTOM_PROMPT_TEMPLATE = """
-            Use the pieces of information provided in the context to answer user's question.
-            If you don't know the answer, just say that you don't know, don't try to make up an answer.
+        Use the provided context to answer the user's question factually.
+        If you don't know the answer, say "I don't know" — do not guess.
 
-            Context:{context}
-            Question:{question}
+        Context: {context}
+        Question: {question}
 
-            Start the answer directly. No small talk, please.
+        Answer directly without greetings or apologies.
         """
-                    
-        REPO_ID = os.environ.get("REPO_ID")
-        
+
         try:
             vectorstore = get_vectorstore()
-            if vectorstore is None:
-                st.error("Failed to load the vector store")
+            if not vectorstore:
+                st.error("Error loading the vector database.")
                 return
-            
+
             qa_chain = RetrievalQA.from_chain_type(
-                llm=load_llm(repo_id=REPO_ID, HF_TOKEN=HF_TOKEN),
+                llm=load_llm(REPO_ID, HF_TOKEN),
                 chain_type="stuff",
-                retriever=vectorstore.as_retriever(search_kwargs={'k':10}),
+                retriever=vectorstore.as_retriever(search_kwargs={'k': 10}),
                 return_source_documents=True,
                 chain_type_kwargs={'prompt': set_custom_prompt(CUSTOM_PROMPT_TEMPLATE)}
-            )   
-            
+            )
+
             response = qa_chain.invoke({'query': prompt})
-            result = response["result"]
-            source_documents = response["source_documents"]
-            source_texts = "\n".join([f"- {doc.page_content}" for doc in source_documents])
-            result_to_show = f"**Answer:** {result}\n\n**Source Documents:**\n{source_texts}"
-            st.chat_message("assistant").markdown(result_to_show)
-            st.session_state["messages"].append({"role": "assistant", "content": result_to_show})
+            result = response.get("result", "No result found.")
+            source_documents = response.get("source_documents", [])
+            sources_text = "\n".join(f"- {doc.page_content}" for doc in source_documents)
+
+            result_to_display = f"**Answer:** {result}\n\n**Sources:**\n{sources_text}"
+            st.chat_message('assistant').markdown(result_to_display)
+            st.session_state['messages'].append({'role': 'assistant', 'content': result_to_display})
+
         except Exception as e:
-            st.error(f"Error: {str(e)}")
+            st.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()
