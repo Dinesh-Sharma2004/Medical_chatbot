@@ -130,5 +130,3 @@ Copy
 Edit
 
 ---
-
-Would you like me to generate this as an actual `README.md` file for download or
