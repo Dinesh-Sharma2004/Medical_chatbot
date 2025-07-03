@@ -4,19 +4,19 @@ A **developer-first Retrieval-Augmented Generation (RAG)** chatbot for answering
 
 ---
 
-## 🔧 Features
+##  Features
 
-- 📄 Ingest local PDFs and extract text
-- ✂️ Chunk documents with overlap using LangChain splitters
-- 🧠 Embed content using HuggingFace Sentence Transformers (e.g., `bge-small`)
-- ⚡ Store embeddings locally using **FAISS** for fast retrieval
-- 🤖 Connect to LLMs like **DeepSeek** or **LLaMA** via Hugging Face endpoints
-- 🗃️ Return answers along with the actual **source documents**
-- 🧑‍⚕️ Medical-focused chat UI via **Streamlit**
+-  Ingest local PDFs and extract text
+-  Chunk documents with overlap using LangChain splitters
+-  Embed content using HuggingFace Sentence Transformers (e.g., `bge-small`)
+-  Store embeddings locally using **FAISS** for fast retrieval
+-  Connect to LLMs like **DeepSeek** or **LLaMA** via Hugging Face endpoints
+-  Return answers along with the actual **source documents**
+-  Medical-focused chat UI via **Streamlit**
 
 ---
 
-## 🧱 Architecture
+##  Architecture
 
 ```text
 PDF Loader ──> Text Splitter ──> Embeddings ──> FAISS Vector DB
@@ -36,7 +36,7 @@ Medical_chatbot/
 ├── .env                    # Environment config
 ├── requirements.txt        # Dependencies
 └── README.md               # You're here
-🚀 Quickstart
+Quickstart
 1. Clone the Repo
 bash
 Copy
@@ -80,7 +80,7 @@ Edit
 streamlit run app.py
 Open your browser to http://localhost:8501.
 
-💡 Example Query
+ Example Query
 text
 Copy
 Edit
@@ -90,7 +90,7 @@ A: The pelvis is formed by the ilium, ischium, and pubis bones.
 
 Sources:
 - Anatomy_Lecture_2024.pdf, Page 4
-⚙️ Dev Notes
+⚙ Dev Notes
 RecursiveCharacterTextSplitter: 768-char chunks with 50-char overlap
 
 Uses HuggingFaceEndpoint for LLMs (via repo_id)
