@@ -1,0 +1,14 @@
+streamlit
+python-dotenv
+langchain
+langchain-community
+faiss-cpu
+pypdf
+tavily-python
+fastapi
+uvicorn
+accelerate
+transformers
+pdf2image
+pytesseract
+huggingface_hub[hf_xet]
