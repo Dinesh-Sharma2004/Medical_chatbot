@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediBot AI</title>
+
+    <!-- Prevent flash of wrong theme -->
+    <script>
+      (function () {
+        try {
+          // Detect stored or system theme
+          const stored = localStorage.getItem('medibot-theme');
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const theme = stored || (prefersDark ? 'dark' : 'light');
+
+          // Apply theme class before React renders
+          if (theme === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+
+          // Store theme so React can pick it up
+          localStorage.setItem('medibot-theme', theme);
+
+          // Avoid flicker by disabling transitions until load
+          document.documentElement.style.setProperty('color-scheme', theme);
+          document.documentElement.dataset.themeTransition = 'none';
+        } catch (err) {
+          console.error('Theme init error:', err);
+        }
+      })();
+    </script>
+
+    <style>
+      /* Disable transitions during theme init */
+      [data-theme-transition='none'] * {
+        transition: none !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <!-- Remove transition lock once page loads -->
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        document.documentElement.removeAttribute('data-theme-transition');
+      });
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
