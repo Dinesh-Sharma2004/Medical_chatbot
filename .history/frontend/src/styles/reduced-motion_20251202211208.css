@@ -1,6 +1,0 @@
-@media (prefers-reduced-motion: reduce) {
-  .reduced-motion * {
-    transition: none !important;
-    animation: none !important;
-  }
-}
