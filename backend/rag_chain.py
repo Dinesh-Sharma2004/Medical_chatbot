@@ -1,64 +1,93 @@
-# rag_chain.py (Ollama + FAISS + Fulltext hybrid)
+# rag_chain.py — Groq + FAISS + Fulltext (Docker-ready)
+
 import os
 import json
 import logging
 import threading
+import time
 from typing import List, Tuple, Optional, Dict, Any
 
+import httpx
 from dotenv import load_dotenv
-import torch
 
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
-
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import Ollama
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 
+# =========================================================
+# ENV + CONFIG
+# =========================================================
 load_dotenv()
 
-# ============================
-# CONFIG
-# ============================
 DB_FAISS_BASE = os.getenv("DB_FAISS_BASE", "vectorstore")
-DB_FAISS_PATH_DEFAULT = os.path.join(DB_FAISS_BASE, "db_faiss")
+DB_FAISS_PATH = os.path.join(DB_FAISS_BASE, "db_faiss")
 MANIFEST_PATH = os.path.join(DB_FAISS_BASE, "manifest.json")
 FULLTEXT_DIR = os.path.join(DB_FAISS_BASE, "fulltext")
 
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3")  # default local LLM
-MODEL_NAME = os.getenv("MODEL_NAME", "EleutherAI/gpt-neo-125M")
+
+GROQ_KEYS = [
+    k.strip() for k in os.getenv("GROQ_API_KEYS", "").split(",")
+    if k.strip()
+]
+if not GROQ_KEYS:
+    raise ValueError("No GROQ_API_KEYS found in environment.")
+
+# Recommended default model
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_ENDPOINT = os.getenv(
+    "GROQ_ENDPOINT",
+    "https://api.groq.com/openai/v1/chat/completions"
+)
 
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.2))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 256))
-
 RETRIEVER_K = int(os.getenv("RETRIEVER_K", 6))
 FETCH_K = int(os.getenv("FETCH_K", 18))
+REQUEST_RETRY_BACKOFF = float(os.getenv("REQUEST_RETRY_BACKOFF", 1.0))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
+# =========================================================
+# KEY ROTATOR
+# =========================================================
+class KeyRotator:
+    def __init__(self, keys: List[str]):
+        if not keys:
+            raise ValueError("GROQ_API_KEYS missing")
+        self.keys = keys
+        self._idx = 0
+        self._lock = threading.Lock()
 
-# ============================
-# THREAD-SAFE RESOURCE MANAGER
-# ============================
+    def get(self) -> str:
+        with self._lock:
+            return self.keys[self._idx]
+
+    def rotate(self) -> str:
+        with self._lock:
+            self._idx = (self._idx + 1) % len(self.keys)
+            logging.warning(f"[KEY_ROTATE] Switched to key index {self._idx}")
+            return self.keys[self._idx]
+
+# =========================================================
+# RESOURCES
+# =========================================================
 class Resources:
-    _lock = threading.Lock()
     _emb = None
     _vs = None
-    _llm = None
-    _tokenizer = None
-    _use_ollama = True
+    _rotator = None
+    _lock = threading.Lock()
 
     @classmethod
     def embeddings(cls):
         if cls._emb is None:
             with cls._lock:
                 if cls._emb is None:
-                    logging.info(f"[INFO] Loading embeddings... ({EMBED_MODEL})")
+                    logging.info(f"[EMB] Loading embeddings: {EMBED_MODEL}")
                     cls._emb = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
         return cls._emb
 
@@ -68,10 +97,10 @@ class Resources:
             try:
                 with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
                     meta = json.load(f)
-                return meta.get("path") or DB_FAISS_PATH_DEFAULT
+                return meta.get("path", DB_FAISS_PATH)
             except Exception:
-                logging.exception("[WARN] Failed reading manifest; using default path")
-        return DB_FAISS_PATH_DEFAULT
+                logging.exception("[WARN] Failed to read manifest")
+        return DB_FAISS_PATH
 
     @classmethod
     def vectorstore(cls):
@@ -79,258 +108,308 @@ class Resources:
             with cls._lock:
                 if cls._vs is None:
                     path = cls._load_manifest_path()
-                    if os.path.exists(path):
-                        try:
-                            logging.info(f"[INFO] Loading FAISS index: {path}")
-                            cls._vs = FAISS.load_local(
-                                path,
-                                cls.embeddings(),
-                                allow_dangerous_deserialization=True,
-                            )
-                            index = getattr(cls._vs, "index", None)
-                            if index is not None and hasattr(index, "nprobe"):
-                                nprobe = max(1, min(16, int(getattr(index, "nlist", 8) ** 0.5)))
-                                index.nprobe = nprobe
-                                logging.info(f"[INFO] Set FAISS index.nprobe={nprobe}")
-                        except Exception:
-                            logging.error("[ERROR] Could not load FAISS index", exc_info=True)
-                    else:
-                        logging.warning(f"[WARN] Vectorstore path not found: {path}")
+                    if not os.path.exists(path):
+                        logging.warning(f"[VS] Vectorstore path missing: {path}")
+                        return None
+                    try:
+                        logging.info(f"[VS] Loading FAISS from {path}")
+                        cls._vs = FAISS.load_local(
+                            path,
+                            cls.embeddings(),
+                            allow_dangerous_deserialization=True
+                        )
+                        idx = getattr(cls._vs, "index", None)
+                        if idx is not None and hasattr(idx, "nprobe"):
+                            idx.nprobe = max(1, min(10, int((getattr(idx, "nlist", 8)) ** 0.5)))
+                            logging.info(f"[VS] nprobe set to {idx.nprobe}")
+                    except Exception:
+                        logging.exception("[ERROR] Could not load FAISS index")
+                        cls._vs = None
         return cls._vs
 
     @classmethod
-    def llm(cls):
-        if cls._llm is None:
+    def init_groq(cls):
+        if cls._rotator is None:
             with cls._lock:
-                if cls._llm is None:
-                    try:
-                        logging.info(f"[INFO] Connecting to Ollama model: {OLLAMA_MODEL}")
-                        cls._llm = Ollama(
-                            model=OLLAMA_MODEL,
-                            temperature=LLM_TEMPERATURE,
-                            num_ctx=4096,
-                        )
-                        cls._use_ollama = True
-                        logging.info("[INFO] Ollama LLM ready.")
-                    except Exception as e:
-                        logging.warning(f"[WARN] Ollama not available ({e}); falling back to HF pipeline.")
-                        cls._use_ollama = False
-                        cls._llm = cls._load_hf_fallback()
-        return cls._llm
+                if cls._rotator is None:
+                    cls._rotator = KeyRotator(GROQ_KEYS)
+                    logging.info("[GROQ] Key rotator initialized.")
+        return cls._rotator
 
     @classmethod
-    def _load_hf_fallback(cls):
-        """Fallback: Hugging Face model pipeline for CPU testing"""
-        try:
-            device = 0 if torch.cuda.is_available() else -1
-            tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-            model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-            gen_pipe = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer=tokenizer,
-                device=device,
-                max_new_tokens=LLM_MAX_TOKENS,
-                temperature=LLM_TEMPERATURE,
-                do_sample=False,
-            )
-            cls._tokenizer = tokenizer
-            return HuggingFacePipeline(pipeline=gen_pipe)
-        except Exception:
-            logging.error("[ERROR] Fallback LLM failed", exc_info=True)
-            return None
+    def key(cls):
+        if cls._rotator is None:
+            cls.init_groq()
+        return cls._rotator.get()
 
+    @classmethod
+    def rotate_key(cls):
+        if cls._rotator is None:
+            cls.init_groq()
+        return cls._rotator.rotate()
 
-# ============================
-# PROMPTS
-# ============================
-BASE_RAG_PROMPT = PromptTemplate.from_template("""
-You are a factual medical assistant. Use ONLY the provided context.
-If you do not find an answer, reply: "I don't know from the uploaded documents."
-
-Context:
-{context}
-
-Question:
-{question}
-
-Answer concisely and cite relevant page numbers if possible:
-""")
-
-COT_RAG_PROMPT = PromptTemplate.from_template("""
-You are a reasoning-based medical assistant.
-Use ONLY the provided context. If missing, say "I don't know from the uploaded documents."
-
-Context:
-{context}
-
-Question:
-{question}
-
-Explain briefly, then give your final answer:
-""")
-
-
-# ============================
-# FULLTEXT + CONTEXT HELPERS
-# ============================
+# =========================================================
+# FULLTEXT HELPERS
+# =========================================================
 def load_fulltext_for_doc(doc: Document) -> str:
     meta = doc.metadata or {}
     doc_id = meta.get("doc_id")
     if not doc_id:
         return doc.page_content or ""
-    path = os.path.join(FULLTEXT_DIR, f"{doc_id}.txt")
+
+    fp = os.path.join(FULLTEXT_DIR, f"{doc_id}.txt")
     try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
+        if os.path.exists(fp):
+            with open(fp, "r", encoding="utf-8") as f:
                 return f.read()
     except Exception:
-        logging.exception(f"[WARN] Failed to read fulltext for doc_id={doc_id}")
+        logging.exception(f"[WARN] Failed fulltext read: {fp}")
     return doc.page_content or ""
 
-
-def build_context_from_docs(docs: List[Document], question: str = "", reserve_for_generation: int = None) -> str:
+def build_context_from_docs(
+    docs: List[Document],
+    question: str = "",
+    reserve_for_generation: int = None
+) -> str:
     if not docs:
         return ""
-    reserve = reserve_for_generation or LLM_MAX_TOKENS
-    max_chars = 6000
-    pieces, total = [], 0
+    limit = 6000
+    cur = 0
+    out: List[str] = []
     for d in docs:
-        text = load_fulltext_for_doc(d).strip()
-        if not text:
+        t = load_fulltext_for_doc(d).strip()
+        if not t:
             continue
-        if total + len(text) > max_chars:
-            pieces.append(text[: max_chars - total] + " ...")
+        if cur + len(t) > limit:
+            out.append(t[: limit - cur] + " …")
             break
-        pieces.append(text)
-        total += len(text)
-    return "\n\n---\n\n".join(pieces)
+        out.append(t)
+        cur += len(t)
+    return "\n\n---\n\n".join(out)
 
-
-# ============================
+# =========================================================
 # RETRIEVAL
-# ============================
-def retrieve_with_scores(question: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
+# =========================================================
+def retrieve_with_scores(q: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
     vs = Resources.vectorstore()
     if not vs:
         return []
     try:
-        docs_scores = vs.similarity_search_with_score(question, fetch_k)
+        docs_scores = vs.similarity_search_with_score(q, fetch_k)
         docs_scores.sort(key=lambda x: -x[1])
         return docs_scores[:k]
     except Exception:
-        logging.error("[ERROR] Retrieval failed", exc_info=True)
+        logging.exception("[RETRIEVE] Failed")
         return []
 
+def retrieve(q: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
+    return [d for d, _ in retrieve_with_scores(q, k, fetch_k)]
 
-def retrieve(question: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
-    return [d for d, _ in retrieve_with_scores(question, k, fetch_k)]
+# =========================================================
+# PROMPTS
+# =========================================================
+BASE_RAG_PROMPT = PromptTemplate.from_template("""
+You are a factual medical assistant. Use ONLY the provided context.
+If information is missing, say: "I don't know from the uploaded documents."
 
+Context:
+{context}
 
-# ============================
-# CHAINS
-# ============================
-def build_chain(prompt: PromptTemplate):
-    llm = Resources.llm()
-    if llm is None:
-        return None
+Question:
+{question}
 
-    def context_builder(x):
-        q = x.get("question", "")
-        docs = retrieve(q)
-        ctx = build_context_from_docs(docs, q, LLM_MAX_TOKENS)
-        return ctx
+Answer clearly:
+""")
 
-    return (
-        RunnablePassthrough.assign(context=context_builder)
-        .assign(
-            answer=(
-                {
-                    "context": lambda x: x["context"],
-                    "question": lambda x: x["question"],
-                }
-                | prompt
-                | llm
-                | StrOutputParser()
-            )
-        )
-    )
+COT_RAG_PROMPT = PromptTemplate.from_template("""
+You are a reasoning medical assistant.
+Use ONLY the provided context. If missing → say "I don't know from the uploaded documents."
 
+Context:
+{context}
 
-def get_rag_chain(mode="basic"):
+Question:
+{question}
+
+Explain briefly, then answer:
+""")
+
+def build_prompt_from_context(context, question, mode="basic"):
+    if (mode or "basic").lower() == "optimized":
+        return COT_RAG_PROMPT.format(context=context, question=question)
+    return BASE_RAG_PROMPT.format(context=context, question=question)
+
+# =========================================================
+# GROQ (Non-Streaming)
+# =========================================================
+def _groq_payload(prompt: str, stream: bool = False) -> Dict[str, Any]:
+    return {
+        "model": GROQ_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": LLM_TEMPERATURE,
+        "max_tokens": LLM_MAX_TOKENS,
+        "stream": stream,
+    }
+
+def generate_with_groq(prompt: str, retry_on_429: bool = True):
+    Resources.init_groq()
+    key = Resources.key()
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+
+    try:
+        resp = httpx.post(GROQ_ENDPOINT, json=_groq_payload(prompt), headers=headers, timeout=90)
+    except Exception as e:
+        logging.exception("[GROQ] Request failed")
+        return None, str(e)
+
+    if resp.status_code == 429 and retry_on_429:
+        Resources.rotate_key()
+        time.sleep(REQUEST_RETRY_BACKOFF)
+        return generate_with_groq(prompt, retry_on_429=False)
+
+    if resp.status_code >= 400:
+        return None, f"HTTP {resp.status_code}: {resp.text}"
+
+    try:
+        j = resp.json()
+        if "choices" in j and j["choices"]:
+            msg = j["choices"][0]["message"].get("content")
+            return msg, None
+        return j.get("text"), None
+    except Exception:
+        logging.exception("[GROQ] JSON parse error")
+        return None, resp.text
+
+# =========================================================
+# GROQ STREAMING (SSE)
+# =========================================================
+def stream_groq(prompt: str):
+    """
+    Yields dicts:
+      {"text": "..."}  for content deltas
+      {"done": True}   when streaming is finished
+    """
+    Resources.init_groq()
+    key = Resources.key()
+
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    payload = _groq_payload(prompt, stream=True)
+
+    client = httpx.Client(timeout=None)
+
+    def _post_with_key(api_key: str):
+        h = dict(headers)
+        h["Authorization"] = f"Bearer {api_key}"
+        return client.post(GROQ_ENDPOINT, headers=h, json=payload)
+
+    resp = _post_with_key(key)
+
+    if resp.status_code == 429:
+        Resources.rotate_key()
+        time.sleep(REQUEST_RETRY_BACKOFF)
+        resp = _post_with_key(Resources.key())
+
+    resp.raise_for_status()
+
+    # SSE stream: lines such as "data: {...}"
+    for line in resp.iter_lines():
+        if not line:
+            continue
+
+        if not line.startswith("data:"):
+            continue
+
+        data_str = line[len("data:"):].strip()
+
+        if data_str == "[DONE]":
+            yield {"done": True}
+            break
+
+        try:
+            payload = json.loads(data_str)
+            delta = payload["choices"][0]["delta"].get("content")
+            if delta:
+                yield {"text": delta}
+        except Exception:
+            continue
+
+# =========================================================
+# MAIN RAG CHAIN
+# =========================================================
+def get_rag_chain(mode: str = "basic"):
+    return (Resources.vectorstore() is not None) and (Resources.init_groq() is not None)
+
+def answer_query(question: str, mode: str = "basic") -> Dict[str, Any]:
     if Resources.vectorstore() is None:
-        logging.warning("[WARN] No vectorstore loaded.")
-        return None
-    if Resources.llm() is None:
-        logging.warning("[WARN] LLM unavailable.")
-        return None
-    mode = (mode or "basic").lower()
-    if mode == "optimized":
-        logging.info("[INFO] Using optimized RAG (CoT mode)")
-        return build_chain(COT_RAG_PROMPT)
-    logging.info("[INFO] Using basic RAG")
-    return build_chain(BASE_RAG_PROMPT)
+        return {"error": "No vectorstore", "answer": None, "sources": []}
 
-
-def answer_query(question: str, mode="basic"):
-    chain = get_rag_chain(mode)
-    if not chain:
-        return {"error": "RAG not ready", "answer": None, "sources": []}
     docs_scores = retrieve_with_scores(question)
     docs = [d for d, _ in docs_scores]
-    sources = []
-    for d, score in docs_scores:
-        meta = d.metadata or {}
-        sources.append(
-            {
-                "source": meta.get("source"),
-                "page": meta.get("page"),
-                "filename": meta.get("filename"),
-                "doc_id": meta.get("doc_id"),
-                "score": float(score),
-            }
-        )
-    try:
-        ans = chain.run({"question": question})
-    except Exception as e:
-        logging.error("[ERROR] Chain failed", exc_info=True)
-        return {"error": str(e), "answer": None, "sources": sources}
+
+    sources = [{
+        "source": (d.metadata or {}).get("source"),
+        "page": (d.metadata or {}).get("page"),
+        "filename": (d.metadata or {}).get("filename"),
+        "doc_id": (d.metadata or {}).get("doc_id"),
+        "score": float(score),
+    } for d, score in docs_scores]
+
+    context = build_context_from_docs(docs, question)
+    prompt = build_prompt_from_context(context, question, mode)
+
+    ans, err = generate_with_groq(prompt)
+    if err:
+        return {"error": err, "answer": None, "sources": sources}
     return {"answer": ans, "sources": sources}
 
-
-# ============================
-# STATUS & WARMUP
-# ============================
+# =========================================================
+# STATUS + WARMUP
+# =========================================================
 def status():
-    info = {"embeddings": False, "vectorstore": False, "llm": False, "use_ollama": Resources._use_ollama}
+    info = {
+        "embeddings": False,
+        "vectorstore": False,
+        "llm": False,
+        "provider": "groq",
+    }
     try:
         info["embeddings"] = Resources.embeddings() is not None
-        info["vectorstore"] = Resources.vectorstore() is not None
-        info["llm"] = Resources.llm() is not None
     except Exception:
-        logging.exception("[STATUS] Failed to collect status")
+        info["embeddings"] = False
+    try:
+        info["vectorstore"] = Resources.vectorstore() is not None
+    except Exception:
+        info["vectorstore"] = False
+    try:
+        info["llm"] = Resources.init_groq() is not None
+    except Exception:
+        info["llm"] = False
     return info
 
-
-def warmup_resources():
+def warmup_resources(load_llm: bool = True):
     try:
         Resources.embeddings()
         Resources.vectorstore()
-        Resources.llm()
-        logging.info("[WARMUP] Resources initialized.")
+        if load_llm:
+            Resources.init_groq()
+        logging.info("[WARMUP] Completed.")
     except Exception:
-        logging.exception("[WARMUP] Failed during warmup")
-
+        logging.exception("[WARMUP] Failure.")
 
 __all__ = [
+    "retrieve",
+    "retrieve_with_scores",
     "Resources",
     "status",
     "warmup_resources",
-    "get_rag_chain",
-    "retrieve",
-    "retrieve_with_scores",
-    "build_context_from_docs",
     "answer_query",
+    "stream_groq",
+    "build_context_from_docs",
+    "GROQ_MODEL",
+    "GROQ_ENDPOINT",
+    "FULLTEXT_DIR",
+    "LLM_MAX_TOKENS",
 ]
