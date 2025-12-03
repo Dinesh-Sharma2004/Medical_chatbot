@@ -1,5 +1,5 @@
 // frontend/src/api.js
-export const API_BASE = window.__BACKEND_URL__ || "http://localhost:8000";
+export const API_BASE = " https://medical-chatbot-1-pmsp.onrender.com";
 
 export const ENDPOINTS = {
   HEALTH: `${API_BASE}/api/health`,
