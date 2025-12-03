@@ -25,7 +25,6 @@ DB_FAISS_PATH = os.path.join(DB_FAISS_BASE, "db_faiss")
 MANIFEST_PATH = os.path.join(DB_FAISS_BASE, "manifest.json")
 FULLTEXT_DIR = os.path.join(DB_FAISS_BASE, "fulltext")
 
-EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 GROQ_KEYS = [
     k.strip() for k in os.getenv("GROQ_API_KEYS", "").split(",")
@@ -73,6 +72,45 @@ class KeyRotator:
             logging.warning(f"[KEY_ROTATE] Switched to key index {self._idx}")
             return self.keys[self._idx]
 
+# ===========================================
+# UPDATED EMBEDDINGS USING GROQ
+# ===========================================
+import httpx
+
+class GroqEmbeddings:
+    """
+    Drop-in replacement for HuggingFaceEmbeddings.
+    Provides:
+    - embed_documents(list[str]) -> List[List[float]]
+    - embed_query(str) -> List[float]
+    """
+    def __init__(self, api_key: str, model: str = "nomic-embed-text"):
+        self.api_key = api_key
+        self.model = model
+        self.url = "https://api.groq.com/v1/embeddings"
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+    def embed_documents(self, texts):
+        out = []
+        for t in texts:
+            out.append(self.embed_query(t))
+        return out
+
+    def embed_query(self, text: str):
+        payload = {
+            "model": self.model,
+            "input": text
+        }
+        try:
+            r = httpx.post(self.url, headers=self.headers, json=payload, timeout=30)
+            j = r.json()
+            return j["data"][0]["embedding"]
+        except Exception:
+            return [0.0] * 768  # fallback
+
 # =========================================================
 # RESOURCES
 # =========================================================
@@ -87,9 +125,11 @@ class Resources:
         if cls._emb is None:
             with cls._lock:
                 if cls._emb is None:
-                    logging.info(f"[EMB] Loading embeddings: {EMBED_MODEL}")
-                    cls._emb = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+                    logging.info("[EMB] Using GROQ embeddings")
+                    key = Resources.key()
+                    cls._emb = GroqEmbeddings(api_key=key, model="nomic-embed-text")
         return cls._emb
+
 
     @classmethod
     def _load_manifest_path(cls) -> str:
