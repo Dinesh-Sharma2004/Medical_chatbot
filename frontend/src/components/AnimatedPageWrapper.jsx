@@ -1,4 +1,3 @@
-// components/AnimatedPageWrapper.jsx
 import React from "react";
 
 export default function AnimatedPageWrapper({ children }) {
