@@ -1,4 +1,3 @@
-// HealthBadge.jsx
 import React, { useEffect, useState } from "react";
 import { CheckCircle, XCircle, Clock, Database } from "lucide-react";
 import { health } from "../api";  // ⬅ updated import
