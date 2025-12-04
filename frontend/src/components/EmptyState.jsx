@@ -1,4 +1,3 @@
-// EmptyState.jsx
 import React from "react";
 import { Database } from "lucide-react";
 
