@@ -263,20 +263,10 @@ async def ask_stream(request: Request):
 # FRONTEND SERVING (Vite build)
 # ======================================================
 if os.path.isdir(FRONTEND_DIST):
-    app.mount("/spa", StaticFiles(directory=FRONTEND_DIST), name="spa")
-
-    @app.get("/", include_in_schema=False)
-    def serve_index():
-        index = os.path.join(FRONTEND_DIST, "index.html")
-        if os.path.exists(index):
-            return FileResponse(index)
-        return JSONResponse({"detail": "Frontend not found"}, status_code=404)
+    print("Serving Vite frontend from:", FRONTEND_DIST)
+    # Serve EVERYTHING from dist at root
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="spa")
 else:
     @app.get("/", include_in_schema=False)
     def root_no_frontend():
-        return {"detail": f"Backend running. Frontend not found at {FRONTEND_DIST}"}
-
-
-@app.get("/_frontend_info", include_in_schema=False)
-def frontend_info():
-    return {"frontend_dist": FRONTEND_DIST, "exists": os.path.isdir(FRONTEND_DIST)}
+        return {"detail": f"Frontend not found at {FRONTEND_DIST}"}
