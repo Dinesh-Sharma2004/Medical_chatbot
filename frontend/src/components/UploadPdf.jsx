@@ -1,4 +1,3 @@
-// frontend/src/hooks/useUploadJob.js
 import { useEffect, useRef, useState } from "react";
 import {
   startUpload,
@@ -8,16 +7,6 @@ import {
   resumeLastUploadPolling,
 } from "../api";
 
-/**
- * useUploadJob
- *
- * - start(file, { onStarted }) -> starts upload, returns server response (job_id etc)
- * - cancel() -> requests server cancel + stops local polling
- * - clear() -> clears hook state (does not delete server job unless deleteSelected is called)
- *
- * Exposes:
- * { jobId, status, progress, detail, filename, sizeText, uploading, error, start, cancel, clear }
- */
 export default function useUploadJob({ pollInterval = 800 } = {}) {
   const [jobId, setJobId] = useState(null);
   const [status, setStatus] = useState(null);
@@ -81,12 +70,7 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
       try {
         onStarted(res);
       } catch (_) {}
-
-      // reset previous cancel
       pollingCancelRef.current.cancelled = false;
-
-      // start polling with pollUploadStatus helper
-      // pollUploadStatus will call onUpdate per poll; we forward to local state
       const job = await pollUploadStatus(jid, {
         onUpdate: (jobObj) => {
           _applyJob(jobObj);
@@ -112,8 +96,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
       throw err;
     }
   }
-
-  // Cancel the job: request server to cancel + stop polling locally
   async function cancel() {
     try {
       pollingCancelRef.current.cancelled = true; // signal to stop any local flow
@@ -126,11 +108,9 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
       }
       try {
         const res = await apiCancelUpload(jid);
-        // update local state based on server response
         setStatus(res.status || "cancel_requested");
         setDetail(res.detail || "Cancel requested");
       } catch (err) {
-        // network or server error; still mark canceled locally
         console.warn("apiCancelUpload failed", err);
         setError(err.message || String(err));
       } finally {
@@ -142,10 +122,8 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     }
   }
 
-  // Clear hook state and optionally delete server-side saved file/metadata
   function clear(opts = { deleteServer: false }) {
     if (opts.deleteServer && jobId) {
-      // fire-and-forget server delete
       apiDeleteUpload(jobId).catch((e) => console.warn("deleteUpload failed", e));
       try {
         localStorage.removeItem("last_upload_job_id");
@@ -162,8 +140,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     setError(null);
     currentJobRef.current = null;
   }
-
-  // On mount: try to resume any last upload found in localStorage
   useEffect(() => {
     let mounted = true;
     const tryResume = async () => {
@@ -192,7 +168,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
   }, []);
 
   return {
-    // state
     jobId,
     status,
     progress,
@@ -201,8 +176,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     sizeText,
     uploading,
     error,
-
-    // actions
     start,
     cancel,
     clear,
