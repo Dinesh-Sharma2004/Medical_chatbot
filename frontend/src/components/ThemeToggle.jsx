@@ -1,4 +1,3 @@
-// ThemeToggle.jsx
 import React from "react"
 import "../styles/reduced-motion.css";
 import { Moon, Sun } from "lucide-react"
