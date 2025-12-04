@@ -6,19 +6,14 @@ import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Callable, Optional, Dict, Any
-
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-
 from rag_chain import Resources
 import rag_chain as rc
 
-# =========================================================
-# CONFIG
-# =========================================================
 load_dotenv()
 
 DB_FAISS_BASE = os.getenv("DB_FAISS_BASE", "vectorstore")
@@ -37,9 +32,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# ---------------------------------------------------------
-# Optional OCR
-# ---------------------------------------------------------
+#Optional OCR
 try:
     from pdf2image import convert_from_path
     import pytesseract
@@ -48,10 +41,6 @@ except Exception as e:
     OCR_AVAILABLE = False
     _ocr_err = e
 
-
-# =========================================================
-# OCR
-# =========================================================
 def ocr_pdf(pdf_path: str) -> List[Document]:
     docs: List[Document] = []
     if not OCR_AVAILABLE:
@@ -87,9 +76,7 @@ def ocr_pdf(pdf_path: str) -> List[Document]:
     return docs
 
 
-# =========================================================
-# PDF → CHUNKS
-# =========================================================
+#Pdf to chunk conversion
 def process_pdf(pdf_path: str) -> List[Document]:
     filename = os.path.basename(pdf_path)
     logging.info("[INGEST] Processing PDF %s", filename)
@@ -139,10 +126,7 @@ def process_pdf(pdf_path: str) -> List[Document]:
 
     return chunks
 
-
-# =========================================================
-# Helper: batch iterator
-# =========================================================
+#batch iterator
 def _batch_iterable(iterable, batch_size):
     it = iter(iterable)
     while True:
@@ -157,9 +141,7 @@ def _batch_iterable(iterable, batch_size):
         yield batch
 
 
-# =========================================================
-# VECTORSTORE CREATION WITH GROQ EMBEDDINGS
-# =========================================================
+#Vectorstore creation with groq embeddings
 def create_vector_store(
     pdf_paths: List[str],
     progress_cb: Optional[Callable[[int, str], None]] = None
