@@ -1,31 +1,24 @@
-// frontend/src/api.js
 export const API_BASE = " https://medical-chatbot-1-pmsp.onrender.com";
 
 export const ENDPOINTS = {
   HEALTH: `${API_BASE}/api/health`,
 
-  // Upload job system
   UPLOAD: `${API_BASE}/api/upload`,
   UPLOAD_STATUS: (id) => `${API_BASE}/api/upload/status/${id}`,
   UPLOAD_CANCEL: (id) => `${API_BASE}/api/upload/cancel/${id}`,
   UPLOAD_DELETE: (id) => `${API_BASE}/api/upload/${id}`,
 
-  // Ask endpoints
   ASK: `${API_BASE}/api/ask`,
   ASK_STREAM: `${API_BASE}/api/ask/stream`,
-
-  // NEW: Retrieve full text for citations
   SOURCE: (docId) => `${API_BASE}/api/source/${encodeURIComponent(docId)}`,
 };
 
-/* Health */
 export async function health() {
   const res = await fetch(ENDPOINTS.HEALTH);
   if (!res.ok) throw new Error("Backend offline");
   return res.json();
 }
 
-/* Upload APIs (unchanged) */
 export async function startUpload(file, { signal } = {}) {
   const form = new FormData();
   form.append("file", file);
@@ -69,7 +62,6 @@ export async function deleteUpload(jobId) {
   return res.json();
 }
 
-/* ASK (non-streaming) */
 export async function askQuestion(question, mode = "basic") {
   const form = new FormData();
   form.append("question", question);
@@ -79,7 +71,6 @@ export async function askQuestion(question, mode = "basic") {
   return res.json();
 }
 
-/* ASK STREAM */
 export async function askStream(question, mode = "basic", { signal } = {}) {
   const res = await fetch(ENDPOINTS.ASK_STREAM, {
     method: "POST",
@@ -91,7 +82,6 @@ export async function askStream(question, mode = "basic", { signal } = {}) {
   return res;
 }
 
-/* NEW: Fetch full text for a given doc_id */
 export async function fetchSource(docId) {
   if (!docId) throw new Error("docId required");
   const res = await fetch(ENDPOINTS.SOURCE(docId));
@@ -100,7 +90,6 @@ export async function fetchSource(docId) {
   return res.json(); // { doc_id, text }
 }
 
-/* Upload polling (unchanged) */
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function defaultBackoff(attempt, base = 300, cap = 5000) {
