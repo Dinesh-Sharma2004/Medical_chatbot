@@ -1,23 +1,16 @@
-# rag_chain.py — Groq + FAISS + Fulltext (Docker-ready)
-
 import os
 import json
 import logging
 import threading
 import time
 from typing import List, Tuple, Optional, Dict, Any
-
 import httpx
 from dotenv import load_dotenv
-
 from langchain_core.prompts import PromptTemplate
 from langchain_core.documents import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
-# =========================================================
-# ENV + CONFIG
-# =========================================================
 load_dotenv()
 
 DB_FAISS_BASE = os.getenv("DB_FAISS_BASE", "vectorstore")
@@ -51,9 +44,6 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# =========================================================
-# KEY ROTATOR
-# =========================================================
 class KeyRotator:
     def __init__(self, keys: List[str]):
         if not keys:
@@ -72,10 +62,6 @@ class KeyRotator:
             logging.warning(f"[KEY_ROTATE] Switched to key index {self._idx}")
             return self.keys[self._idx]
 
-# ===========================================
-# UPDATED EMBEDDINGS USING GROQ
-# ===========================================
-import httpx
 
 class GroqEmbeddings:
     """
@@ -111,9 +97,7 @@ class GroqEmbeddings:
         except Exception:
             return [0.0] * 768  # fallback
 
-# =========================================================
-# RESOURCES
-# =========================================================
+
 class Resources:
     _emb = None
     _vs = None
@@ -245,9 +229,7 @@ def retrieve_with_scores(q: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
 def retrieve(q: str, k: int = RETRIEVER_K, fetch_k: int = FETCH_K):
     return [d for d, _ in retrieve_with_scores(q, k, fetch_k)]
 
-# =========================================================
-# PROMPTS
-# =========================================================
+
 BASE_RAG_PROMPT = PromptTemplate.from_template("""
 You are a factual medical assistant. Use ONLY the provided context.
 If information is missing, say: "I don't know from the uploaded documents."
@@ -279,9 +261,7 @@ def build_prompt_from_context(context, question, mode="basic"):
         return COT_RAG_PROMPT.format(context=context, question=question)
     return BASE_RAG_PROMPT.format(context=context, question=question)
 
-# =========================================================
-# GROQ (Non-Streaming)
-# =========================================================
+
 def _groq_payload(prompt: str, stream: bool = False) -> Dict[str, Any]:
     return {
         "model": GROQ_MODEL,
@@ -376,9 +356,6 @@ def stream_groq(prompt: str):
         except Exception:
             continue
 
-# =========================================================
-# MAIN RAG CHAIN
-# =========================================================
 def get_rag_chain(mode: str = "basic"):
     return (Resources.vectorstore() is not None) and (Resources.init_groq() is not None)
 
@@ -405,9 +382,7 @@ def answer_query(question: str, mode: str = "basic") -> Dict[str, Any]:
         return {"error": err, "answer": None, "sources": sources}
     return {"answer": ans, "sources": sources}
 
-# =========================================================
-# STATUS + WARMUP
-# =========================================================
+
 def status():
     info = {
         "embeddings": False,
