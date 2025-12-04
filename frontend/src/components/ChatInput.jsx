@@ -1,4 +1,3 @@
-// ChatInput.jsx
 import React from "react";
 import { Send, X } from "lucide-react";
 
