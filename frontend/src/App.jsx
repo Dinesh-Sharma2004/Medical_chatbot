@@ -1,4 +1,3 @@
-// App.jsx
 import React from "react"
 import { Routes, Route, Link, useLocation } from "react-router-dom"
 import ChatPage from "./pages/ChatPage"
