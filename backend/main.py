@@ -1,5 +1,3 @@
-# main.py — Docker-Ready FastAPI Backend (Groq + FAISS RAG)
-
 import os
 import uuid
 import json
@@ -7,19 +5,14 @@ import logging
 import asyncio
 import threading
 from typing import Dict, Any
-
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from dotenv import load_dotenv
-
 from ingest import create_vector_store
 import rag_chain as rc
 
-# ======================================================
-# INITIAL SETUP
-# ======================================================
 load_dotenv()
 logging.basicConfig(
     level=logging.INFO,
@@ -37,9 +30,6 @@ FRONTEND_DIST = os.getenv("FRONTEND_DIST", DEFAULT_FRONTEND_DIST)
 
 app = FastAPI(title="MediBot Backend (Groq RAG)", version="4.0.0")
 
-# ======================================================
-# CORS
-# ======================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,15 +38,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ======================================================
-# UPLOAD JOB STATE
-# ======================================================
+
 UPLOAD_JOBS: Dict[str, Dict[str, Any]] = {}
 UPLOAD_LOCK = threading.Lock()
 
-# ======================================================
-# HEALTH
-# ======================================================
+
 @app.get("/api/health")
 def health():
     try:
@@ -71,9 +57,7 @@ def health():
         logging.exception("Health endpoint failure")
         return {"status": "error", "vector_ready": False, "llm_ready": False}
 
-# ======================================================
-# UPLOAD → INGEST
-# ======================================================
+
 @app.post("/api/upload")
 async def upload_pdf(file: UploadFile = File(...)):
     if not file.filename.lower().endswith(".pdf"):
@@ -136,9 +120,7 @@ def upload_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
-# ======================================================
-# FULLTEXT DOCUMENT ACCESS
-# ======================================================
+
 @app.get("/api/source/{doc_id}")
 def get_full_source(doc_id: str):
     full_dir = getattr(rc, "FULLTEXT_DIR", "vectorstore/fulltext")
@@ -148,9 +130,7 @@ def get_full_source(doc_id: str):
     with open(path, "r", encoding="utf-8") as f:
         return {"doc_id": doc_id, "text": f.read()}
 
-# ======================================================
-# NON-STREAM ASK
-# ======================================================
+
 @app.post("/api/ask")
 async def ask(question: str = Form(...), mode: str = Form("basic")):
     question = question.strip()
@@ -172,9 +152,7 @@ async def ask(question: str = Form(...), mode: str = Form("basic")):
         "mode": mode,
     }
 
-# ======================================================
-# STREAMING ASK
-# ======================================================
+
 @app.post("/api/ask/stream")
 async def ask_stream(request: Request):
     data = await request.json()
@@ -259,9 +237,6 @@ async def ask_stream(request: Request):
         media_type="application/x-ndjson"
     )
 
-# ======================================================
-# FRONTEND SERVING (Vite build)
-# ======================================================
 if os.path.isdir(FRONTEND_DIST):
     print("Serving Vite frontend from:", FRONTEND_DIST)
     # Serve EVERYTHING from dist at root
