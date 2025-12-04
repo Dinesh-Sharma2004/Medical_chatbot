@@ -1,4 +1,3 @@
-// Message.jsx
 import React from "react"
 import { User, Bot, ExternalLink, FileText, Link as LinkIcon } from "lucide-react"
 
