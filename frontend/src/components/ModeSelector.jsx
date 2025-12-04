@@ -1,4 +1,3 @@
-// ModeSelector.jsx
 import React from "react";
 import { Trash2, Database, Brain, Shield } from "lucide-react";
 
