@@ -1,4 +1,3 @@
-// frontend/src/hooks/useUploadJob.js
 import { useEffect, useRef, useState } from "react";
 import {
   startUpload,
@@ -30,7 +29,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
       return;
     }
 
-    // Normalize job id keys
     const jid = job.job_id ?? job.jobId ?? job.id ?? job.upload_id ?? null;
     if (jid) setJobId(jid);
 
@@ -59,8 +57,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   }
-
-  // Start upload
   async function start(file, { onStarted = () => {}, onUpdate = () => {} } = {}) {
     setError(null);
     setUploading(true);
@@ -70,7 +66,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
       const jid = res.job_id ?? res.jobId ?? res.id ?? res.upload_id ?? null;
 
       if (jid) {
-        // persist resume key immediately so other hooks won't resume an older id
         try {
           localStorage.setItem(RESUME_KEY, jid);
         } catch (_) {}
@@ -87,7 +82,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
 
       pollingCancelRef.current.cancelled = false;
 
-      // pollUploadStatus should return final job or throw
       const finalJob = await pollUploadStatus(jid, {
         onUpdate: (jobObj) => {
           _applyJob(jobObj);
@@ -101,10 +95,7 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
         },
       });
 
-      // Apply final state
       _applyJob(finalJob || currentJobRef.current);
-
-      // terminal state reached: clear resume key if it matches
       try {
         const stored = localStorage.getItem(RESUME_KEY);
         if (stored && stored === (jid || stored)) {
@@ -122,7 +113,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     }
   }
 
-  // Cancel
   async function cancel() {
     try {
       pollingCancelRef.current.cancelled = true;
@@ -140,7 +130,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
         console.warn("apiCancelUpload failed", err);
         setError(err.message || String(err));
       } finally {
-        // clear resume key if it was pointing to this job
         try {
           const stored = localStorage.getItem(RESUME_KEY);
           if (stored === jid) localStorage.removeItem(RESUME_KEY);
@@ -153,7 +142,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     }
   }
 
-  // Clear hook state
   function clear(opts = { deleteServer: false }) {
     if (opts.deleteServer && jobId) {
       apiDeleteUpload(jobId).catch((e) => console.warn("deleteUpload failed", e));
@@ -170,13 +158,10 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
     setError(null);
     currentJobRef.current = null;
   }
-
-  // On mount: try resume, but only if multi-upload store isn't active
   useEffect(() => {
     let mounted = true;
     const tryResume = async () => {
       try {
-        // if multi-upload state exists, don't auto-resume single-job flow
         const multi = localStorage.getItem(STORAGE_KEY);
         if (multi) {
           console.info("Multi-upload state present; skipping single-job resume.");
@@ -192,7 +177,6 @@ export default function useUploadJob({ pollInterval = 800 } = {}) {
         if (!mounted) return;
         if (resumed) {
           _applyJob(resumed);
-          // remove resume key after restoring state so we don't resume again incorrectly
           try { localStorage.removeItem(RESUME_KEY); } catch (_) {}
           setUploading(false);
         }
