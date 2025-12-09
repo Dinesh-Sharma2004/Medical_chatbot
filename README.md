@@ -39,6 +39,7 @@ This project is designed for learning, experimentation, and demonstrating end-to
 ## 📁 Project Structure
 
 Medical_chatbot/
+
 │
 ├── backend/
 │ ├── main.py
