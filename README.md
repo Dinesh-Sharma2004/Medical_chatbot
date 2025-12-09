@@ -137,6 +137,8 @@ HF_HOME="/cache/huggingface"
 
 HF_HUB_CACHE="/cache/huggingface"
 
+---
+
 ### 📡 API Endpoints**
 
 Method	Endpoint	Description
@@ -280,9 +282,9 @@ Response
   "exists": true
 }
 ```
+---
 
-
-🧠 How It Works
+### 🧠 How It Works
 The user sends a message via the React UI
 
 The message is forwarded to FastAPI
@@ -314,12 +316,12 @@ pytest
 
  Implement chat history storage
 ```
-🤝 Contributing
+# 🤝 Contributing
 Pull requests are welcome!
 For major changes, please open an issue first to discuss your ideas.
 
-📄 License
+### 📄 License
 This project is licensed under the MIT License.
 
-⭐ Support
+## ⭐ Support
 If you find this project helpful, please star the repository ⭐
