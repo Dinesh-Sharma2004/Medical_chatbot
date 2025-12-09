@@ -43,25 +43,27 @@ Medical_chatbot/
 │
 ├── backend/
 
-│ ├── main.py
+│     ├── main.py
 
-│ ├── requirements.txt
+│     ├── requirements.txt
 
-│ ├── app.py
+│     ├── app.py
 
-│ ├── ingest.py
+│     ├── ingest.py
 
-│ ├── rag_chain.py
+│     ├── rag_chain.py
 
 │
 
 ├── frontend/
 
-│ ├── src/
+│     ├──dist/
 
-│ ├── public/
+│     ├── src/
 
-│ └── package.json
+│     ├── public/
+
+│     └── package.json
 
 │
 
