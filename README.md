@@ -40,7 +40,6 @@ This project is designed for learning, experimentation, and demonstrating end-to
 
 Medical_chatbot/
 
-│
 ├── backend/
 
 │     ├── main.py
