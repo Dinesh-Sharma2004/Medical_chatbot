@@ -284,7 +284,8 @@ Response
 ```
 ---
 
-### 🧠 How It Works
+# 🧠 How It Works
+
 The user sends a message via the React UI
 
 The message is forwarded to FastAPI
