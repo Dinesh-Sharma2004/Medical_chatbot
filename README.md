@@ -140,6 +140,7 @@ HF_HUB_CACHE="/cache/huggingface"
 ### 📡 API Endpoints**
 
 Method	Endpoint	Description
+
 🚀 1. Health Check
 GET /api/health
 
