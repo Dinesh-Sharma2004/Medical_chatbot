@@ -75,8 +75,8 @@ Medical_chatbot/
 
 ### 📌 **1. Clone the Repository**
 ```bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/Dinesh-Sharma2004/Medical_chatbot.git
+cd Medical_Chatbot
 ```
 
 ### 📌 2. Backend Setup (FastAPI)**
@@ -105,15 +105,165 @@ Create a .env file inside backend/:
 
 ini
 Copy code
-GOOGLE_MAPS_API_KEY=your-api-key
-OPENAI_API_KEY=your-api-key
-MODEL_PATH=./models/model.pkl
+RETRIEVER_K=8
+RETRIEVER_FETCH_K=20
+RETRIEVER_RERANK_TOP_K=5
+USE_RERANKER=false
+LLM_MAX_TOKENS=300
+LLM_DEVICE=auto
+LLM_QUANTIZE=false
+LLM_TEMPERATURE=0.1
+GROQ_API_KEYS="your-api-keys(I used 15 with comma separated values in one line)"
+GROQ_MODEL=llama-3.1-8b-instant
+EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBED_BATCH_SIZE=32
+DB_FAISS_BASE="vectorstore"
+HF_HOME="/cache/huggingface"
+HF_HUB_CACHE="/cache/huggingface"
 
 ### 📡 API Endpoints**
 Method	Endpoint	Description
-POST	/chat	Send a user message to chatbot
-GET	/health	Health check for backend
-POST	/predict	(Optional) ML model prediction
+🚀 1. Health Check
+GET /api/health
+
+Returns the live status of the backend, including vector store & LLM readiness.
+
+Response
+```bash
+{
+  "status": "ok",
+  "vector_ready": true,
+  "llm_ready": true,
+  "detail": {
+    "vectorstore": true,
+    "llm": true
+  }
+}
+```
+📄 2. PDF Upload & Ingestion
+POST /api/upload
+
+Uploads a PDF file, saves it, and triggers background ingestion → embeddings → FAISS vector store creation.
+
+Form-Data
+Field	Type	Description
+file	file (.pdf)	PDF document to ingest
+
+Response
+```bash
+{
+  "ok": true,
+  "job_id": "uuid",
+  "filename": "uploaded.pdf"
+}
+```
+GET /api/upload/status/{job_id}
+
+Fetches the ongoing ingestion progress.
+
+Response Example
+```bash
+{
+  "job_id": "1234",
+  "filename": "report.pdf",
+  "status": "processing",
+  "progress": 60,
+  "detail": "Chunking pages"
+}
+```
+
+Status values:
+```
+processing
+
+completed
+
+error
+```
+📚 3. Full Document Text Retrieval
+GET /api/source/{doc_id}
+
+Returns the fulltext representation of a document chunk created during ingestion.
+
+Response
+```
+{
+  "doc_id": "page_3",
+  "text": "Full page extracted text..."
+}
+```
+💬 4. Non-Streaming Question Answering
+POST /api/ask
+
+Sends a user query and returns the final answer using RAG (Groq + FAISS).
+
+Form Fields
+Field	Type	Default	Description
+question	string	required	User query
+mode	string	"basic"	RAG chain mode
+
+Response
+```
+{
+  "answer": "The answer...",
+  "sources": [
+    {
+      "filename": "file.pdf",
+      "page": 12,
+      "doc_id": "chunk_12"
+    }
+  ],
+  "mode": "basic"
+}
+```
+
+🔄 5. Streaming Question Answering (NDJSON)
+POST /api/ask/stream
+
+Returns the answer token-by-token (Groq streaming). Uses NDJSON format where every line is a JSON object.
+
+Body (JSON)
+```
+{
+  "question": "What is diabetes?",
+  "mode": "basic"
+}
+```
+Streaming Event Types
+Type	Meaning
+sources	First event → List of retrieved chunks
+partial	Partial answer chunk
+done	Completion signal
+error	Error message
+Example Stream
+```
+{"type":"sources","sources":[...]}
+{"type":"partial","text":"Diabetes is..."}
+{"type":"partial","text":"a metabolic disorder..."}
+{"type":"done"}
+```
+
+🖥️ 6. Frontend Serving (Vite Build)
+
+If the frontend build exists, it serves the SPA:
+
+GET /
+```
+Serves index.html from Vite’s dist/ folder.
+```
+🧪 7. Frontend Info Endpoint
+GET /_frontend_info
+
+Returns the actual location of the frontend distribution folder.
+
+Response
+```
+{
+  "frontend_dist": "/path/to/dist",
+  "exists": true
+}
+```
+
 
 🧠 How It Works
 The user sends a message via the React UI
