@@ -104,24 +104,41 @@ npm run dev
 Create a .env file inside backend/:
 
 ini
+
 Copy code
+
 RETRIEVER_K=8
+
 RETRIEVER_FETCH_K=20
+
 RETRIEVER_RERANK_TOP_K=5
+
 USE_RERANKER=false
+
 LLM_MAX_TOKENS=300
+
 LLM_DEVICE=auto
+
 LLM_QUANTIZE=false
+
 LLM_TEMPERATURE=0.1
+
 GROQ_API_KEYS="your-api-keys(I used 15 with comma separated values in one line)"
+
 GROQ_MODEL=llama-3.1-8b-instant
+
 EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
+
 EMBED_BATCH_SIZE=32
+
 DB_FAISS_BASE="vectorstore"
+
 HF_HOME="/cache/huggingface"
+
 HF_HUB_CACHE="/cache/huggingface"
 
 ### 📡 API Endpoints**
+
 Method	Endpoint	Description
 🚀 1. Health Check
 GET /api/health
@@ -148,9 +165,8 @@ Uploads a PDF file, saves it, and triggers background ingestion → embeddings �
 Form-Data
 Field	Type	Description
 file	file (.pdf)	PDF document to ingest
-
+```
 Response
-```bash
 {
   "ok": true,
   "job_id": "uuid",
@@ -161,8 +177,8 @@ GET /api/upload/status/{job_id}
 
 Fetches the ongoing ingestion progress.
 
-Response Example
-```bash
+```Response Example
+
 {
   "job_id": "1234",
   "filename": "report.pdf",
@@ -202,8 +218,8 @@ Field	Type	Default	Description
 question	string	required	User query
 mode	string	"basic"	RAG chain mode
 
-Response
 ```
+Response
 {
   "answer": "The answer...",
   "sources": [
@@ -222,8 +238,8 @@ POST /api/ask/stream
 
 Returns the answer token-by-token (Groq streaming). Uses NDJSON format where every line is a JSON object.
 
-Body (JSON)
 ```
+Body (JSON)
 {
   "question": "What is diabetes?",
   "mode": "basic"
@@ -256,8 +272,8 @@ GET /_frontend_info
 
 Returns the actual location of the frontend distribution folder.
 
-Response
 ```
+Response
 {
   "frontend_dist": "/path/to/dist",
   "exists": true
