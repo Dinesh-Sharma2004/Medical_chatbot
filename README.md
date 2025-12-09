@@ -43,9 +43,9 @@ Medical_chatbot/
 ├── backend/
 │ ├── main.py
 │ ├── requirements.txt
-│ ├── models/
-│ ├── utils/
-│ └── ...
+│ ├── app.py
+│ ├── ingest.py
+│ ├── rag_chain.py
 │
 ├── frontend/
 │ ├── src/
@@ -65,24 +65,29 @@ Copy code
 ```bash
 git clone https://github.com/<your-username>/<repo-name>.git
 cd <repo-name>
-📌 2. Backend Setup (FastAPI)
-bash
+```
+
+### 📌 2. Backend Setup (FastAPI)**
+```bash
 Copy code
 cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
 Run the server:
 
-bash
+```bash
 Copy code
 uvicorn main:app --host 0.0.0.0 --port 8000
-📌 3. Frontend Setup (React)
-bash
+```
+### 📌 3. Frontend Setup (React)**
+```bash
 Copy code
 cd frontend
 npm install
 npm run dev
+```
 🔧 Environment Variables
 Create a .env file inside backend/:
 
@@ -91,7 +96,8 @@ Copy code
 GOOGLE_MAPS_API_KEY=your-api-key
 OPENAI_API_KEY=your-api-key
 MODEL_PATH=./models/model.pkl
-📡 API Endpoints
+
+### 📡 API Endpoints**
 Method	Endpoint	Description
 POST	/chat	Send a user message to chatbot
 GET	/health	Health check for backend
@@ -115,7 +121,7 @@ Response is returned to frontend
 User sees the AI-generated output
 
 🧪 Running Tests
-bash
+```bash
 Copy code
 pytest
 🛤 Roadmap
@@ -128,7 +134,7 @@ pytest
  Add user authentication
 
  Implement chat history storage
-
+```
 🤝 Contributing
 Pull requests are welcome!
 For major changes, please open an issue first to discuss your ideas.
