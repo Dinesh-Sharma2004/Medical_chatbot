@@ -42,20 +42,29 @@ Medical_chatbot/
 │
 ├── backend/
 │ ├── main.py
+
 │ ├── requirements.txt
+
 │ ├── app.py
+
 │ ├── ingest.py
+
 │ ├── rag_chain.py
+
 │
+
 ├── frontend/
+
 │ ├── src/
+
 │ ├── public/
+
 │ └── package.json
+
 │
+
 └── README.md
 
-yaml
-Copy code
 
 ---
 
