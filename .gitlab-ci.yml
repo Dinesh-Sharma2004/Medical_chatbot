@@ -1,0 +1,57 @@
+image: docker:24.0.2
+
+services:
+  - docker:24-dind
+
+stages:
+  - build
+  - push
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  # These are default GitLab variables available in runner; update if you use custom registry
+  IMAGE_BACKEND: "$CI_REGISTRY_IMAGE/backend"
+  IMAGE_FRONTEND: "$CI_REGISTRY_IMAGE/frontend"
+
+before_script:
+  - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+
+build-backend:
+  stage: build
+  script:
+    - docker build -t $IMAGE_BACKEND:$CI_COMMIT_SHORT_SHA -f backend/Dockerfile .
+    - docker tag $IMAGE_BACKEND:$CI_COMMIT_SHORT_SHA $IMAGE_BACKEND:latest
+  artifacts:
+    expire_in: 1h
+    paths:
+      - backend/
+
+build-frontend:
+  stage: build
+  script:
+    - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA -f frontend/Dockerfile .
+    - docker tag $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA $IMAGE_FRONTEND:latest
+  artifacts:
+    expire_in: 1h
+    paths:
+      - frontend/
+
+push-images:
+  stage: push
+  script:
+    - docker push $IMAGE_BACKEND:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_BACKEND:latest
+    - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_FRONTEND:latest
+  only:
+    - branches
+
+# Optional deploy job - requires you to provide DEPLOY_HOST, DEPLOY_USER and SSH_PRIVATE_KEY in CI variables
+deploy:
+  stage: deploy
+  when: manual
+  script:
+    - echo "Deploy stage - implement your deploy steps here (docker pull on your server, restart service)"
+  only:
+    - main

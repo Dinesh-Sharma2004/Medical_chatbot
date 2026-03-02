@@ -1,0 +1,57 @@
+# Global ignores
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+README.md
+*.log
+*.tmp
+*.swp
+*.swo
+*.lock
+.DS_Store
+.vscode
+.idea
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+**/node_modules/
+dist/
+build/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local runtime folders
+tmp/
+cache/
+data/
+backend/data/
+backend/vectorstore/
+logs/
+vectorstore/
+
+# HuggingFace cache
+cache/
+.huggingface/
+
+# Test + fixtures
+tests/
+fixtures/
+coverage/
+.nyc_output/
+
+# App-specific junk
+server/
+service/
+tmp/
+packages/
+frontend_backup/
+.history/
