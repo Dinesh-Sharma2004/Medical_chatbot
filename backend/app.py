@@ -8,7 +8,7 @@ if __name__ == "__main__":
     reload = os.getenv("DEV_RELOAD", "false").lower() in ("1", "true", "yes")
 
     uvicorn.run(
-        "main:app",
+        "backend.main:app",
         host=host,
         port=port,
         reload=reload,
