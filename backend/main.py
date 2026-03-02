@@ -14,12 +14,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 
-from ingest import create_vector_store
-import rag_chain as rc
+from .ingest import create_vector_store
+from . import rag_chain as rc
 
-# ======================================================
-# INITIAL SETUP
-# ======================================================
+
 load_dotenv()
 logging.basicConfig(
     level=logging.INFO,

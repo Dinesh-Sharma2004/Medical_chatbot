@@ -16,7 +16,7 @@ from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
-import rag_chain as rc
+from . import rag_chain as rc
 
 # =========================================================
 # CONFIG
