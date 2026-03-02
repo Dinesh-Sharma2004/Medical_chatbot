@@ -6,7 +6,6 @@ import json
 import logging
 import tempfile
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Callable, Optional, Dict, Any
 
 from dotenv import load_dotenv
@@ -33,9 +32,9 @@ FULLTEXT_DIR = os.path.join(DB_FAISS_BASE, "fulltext")
 
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", 800))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", 120))
-EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", 32))
+EMBED_BATCH_SIZE = min(8, int(os.getenv("EMBED_BATCH_SIZE", 8)))
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
-MAX_WORKERS = max(1, int(os.getenv("INGEST_MAX_WORKERS", 1)))
+MAX_PDF_PAGES = int(os.getenv("RAG_MAX_PDF_PAGES", 120))
 RAG_WARMUP_ON_INGEST = os.getenv("RAG_WARMUP_ON_INGEST", "true").lower() in ("1", "true", "yes")
 
 logging.basicConfig(
@@ -100,6 +99,14 @@ def process_pdf(pdf_path: str) -> List[Document]:
     try:
         loader = PyPDFLoader(pdf_path)
         docs = loader.load()
+        if MAX_PDF_PAGES > 0 and len(docs) > MAX_PDF_PAGES:
+            logging.warning(
+                "[INGEST] Truncating %s to first %d pages (had %d)",
+                filename,
+                MAX_PDF_PAGES,
+                len(docs),
+            )
+            docs = docs[:MAX_PDF_PAGES]
         for d in docs:
             if not isinstance(d.metadata, dict):
                 d.metadata = {}
@@ -185,95 +192,60 @@ def create_vector_store(
         if progress_cb:
             progress_cb(10, "Extracting text from PDFs...")
 
-        all_chunks: List[Document] = []
-
-        if MAX_WORKERS <= 1:
-            for p in pdf_paths:
-                chunks = process_pdf(p)
-                if chunks:
-                    all_chunks.extend(chunks)
-        else:
-            with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(pdf_paths))) as executor:
-                futures = {executor.submit(process_pdf, p): p for p in pdf_paths}
-                for fut in as_completed(futures):
-                    p = futures[fut]
-                    try:
-                        chunks = fut.result()
-                        if chunks:
-                            all_chunks.extend(chunks)
-                    except Exception:
-                        logging.exception("[INGEST] Error while processing %s", p)
-
-        if not all_chunks:
-            logging.error("[INGEST] No chunks produced from any PDF.")
-            return False
-
-        logging.info("[INGEST] Total chunks: %d", len(all_chunks))
-        if progress_cb:
-            progress_cb(30, f"Total chunks: {len(all_chunks)} - embedding...")
-
         logging.info("[INGEST] Loading embeddings: %s", EMBED_MODEL)
         embeddings = FastEmbedEmbeddings(model_name=EMBED_MODEL)
-
-        docs_for_index: List[Document] = []
         next_id = 0
-        total = len(all_chunks)
-        processed = 0
+        faiss_store = None
+        indexed_chunks = 0
+        total_pdfs = max(1, len(pdf_paths))
 
-        for batch in _batch_iterable(all_chunks, EMBED_BATCH_SIZE):
-            texts: List[str] = []
-            docs_batch: List[Document] = []
+        for i, p in enumerate(pdf_paths, start=1):
+            chunks = process_pdf(p)
+            if not chunks:
+                continue
 
-            for c in batch:
-                metadata = c.metadata or {}
-                page = metadata.get("page", "?")
-                filename = metadata.get("filename") or os.path.basename(metadata.get("source", ""))
-                doc_id = f"{filename}_p{page}_i{next_id}"
-                next_id += 1
-
-                full_text = c.page_content or ""
-                full_path = os.path.join(FULLTEXT_DIR, f"{doc_id}.txt")
-                try:
-                    with open(full_path, "w", encoding="utf-8") as f:
-                        f.write(full_text)
-                except Exception:
-                    logging.exception("[INGEST] Failed writing fulltext for %s", doc_id)
-
-                snippet = full_text[:800]
-                idx_meta: Dict[str, Any] = dict(metadata)
-                idx_meta["doc_id"] = doc_id
-                idx_meta.setdefault("filename", filename)
-                idx_doc = Document(page_content=snippet, metadata=idx_meta)
-                docs_batch.append(idx_doc)
-                texts.append(snippet if snippet else " ")
-
-            try:
-                emb_batch = embeddings.embed_documents(texts)
-            except Exception:
-                logging.exception("[EMB] Batch failed, trying per-document")
-                emb_batch = []
-                for t in texts:
-                    try:
-                        emb_batch.append(embeddings.embed_query(t))
-                    except Exception:
-                        emb_batch.append([0.0] * 384)
-
-            for d, vec in zip(docs_batch, emb_batch):
-                docs_for_index.append(d)
-
-            processed += len(batch)
             if progress_cb:
-                pct = 30 + int(50 * processed / total)
-                progress_cb(pct, f"Embedding {processed}/{total} chunks...")
+                progress_cb(20 + int(50 * (i - 1) / total_pdfs), f"Embedding file {i}/{total_pdfs}...")
 
-        del all_chunks
+            for batch in _batch_iterable(chunks, EMBED_BATCH_SIZE):
+                docs_batch: List[Document] = []
 
-        # Build FAISS
-        try:
-            logging.info("[INGEST] Building FAISS vectorstore...")
-            faiss_store = FAISS.from_documents(docs_for_index, embedding=embeddings)
-        except Exception:
-            logging.exception("[INGEST] Failed building FAISS vectorstore")
+                for c in batch:
+                    metadata = c.metadata or {}
+                    page = metadata.get("page", "?")
+                    filename = metadata.get("filename") or os.path.basename(metadata.get("source", ""))
+                    doc_id = f"{filename}_p{page}_i{next_id}"
+                    next_id += 1
+
+                    full_text = c.page_content or ""
+                    full_path = os.path.join(FULLTEXT_DIR, f"{doc_id}.txt")
+                    try:
+                        with open(full_path, "w", encoding="utf-8") as f:
+                            f.write(full_text)
+                    except Exception:
+                        logging.exception("[INGEST] Failed writing fulltext for %s", doc_id)
+
+                    snippet = full_text[:800]
+                    idx_meta: Dict[str, Any] = dict(metadata)
+                    idx_meta["doc_id"] = doc_id
+                    idx_meta.setdefault("filename", filename)
+                    docs_batch.append(Document(page_content=snippet if snippet else " ", metadata=idx_meta))
+
+                try:
+                    if faiss_store is None:
+                        faiss_store = FAISS.from_documents(docs_batch, embedding=embeddings)
+                    else:
+                        faiss_store.add_documents(docs_batch)
+                except Exception:
+                    logging.exception("[INGEST] Failed while indexing batch")
+                    return False
+
+                indexed_chunks += len(docs_batch)
+
+            del chunks
+
+        if faiss_store is None or indexed_chunks == 0:
+            logging.error("[INGEST] No chunks produced from any PDF.")
             return False
 
         # Save FAISS
@@ -299,7 +271,7 @@ def create_vector_store(
         try:
             manifest = {
                 "path": DB_FAISS_PATH,
-                "chunks": len(docs_for_index),
+                "chunks": indexed_chunks,
                 "embed_model": EMBED_MODEL,
                 "fulltext_dir": FULLTEXT_DIR,
                 "index_type": "flat",
