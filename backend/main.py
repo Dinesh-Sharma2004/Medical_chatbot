@@ -265,6 +265,10 @@ async def ask_stream(request: Request):
 # FRONTEND SERVING (Vite build)
 # ======================================================
 if os.path.isdir(FRONTEND_DIST):
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
     app.mount("/spa", StaticFiles(directory=FRONTEND_DIST), name="spa")
 
     @app.get("/", include_in_schema=False)
