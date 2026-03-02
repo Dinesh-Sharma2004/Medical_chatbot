@@ -1,5 +1,10 @@
 // frontend/src/api.js
-export const API_BASE = window.__BACKEND_URL__ || "http://localhost:8000";
+const defaultBase =
+  typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : "http://localhost:8000";
+
+export const API_BASE = window.__BACKEND_URL__ || defaultBase;
 
 export const ENDPOINTS = {
   HEALTH: `${API_BASE}/api/health`,
