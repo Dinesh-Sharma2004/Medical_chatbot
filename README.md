@@ -5,7 +5,7 @@ colorFrom: blue
 colorTo: green
 sdk: docker
 app_port: 8000
-short_description: FastAPI + React medical chatbot with PDF upload and Groq-powered RAG.
+short_description: Medical chatbot with PDF upload and Groq RAG.
 ---
 
 # Medical Chatbot (FastAPI + React + RAG)
