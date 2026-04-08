@@ -5,13 +5,9 @@ services:
     plan: free
     autoDeploy: true
     healthCheckPath: /api/health
-    disk:
-      name: medical-chatbot-data
-      mountPath: /data
-      sizeGB: 5
     envVars:
       - key: DB_FAISS_BASE
-        value: /data/vectorstore
+        value: /tmp/vectorstore
       - key: EMBED_MODEL
         value: BAAI/bge-small-en-v1.5
       - key: EMBED_BATCH_SIZE

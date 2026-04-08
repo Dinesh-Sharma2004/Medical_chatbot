@@ -60,7 +60,6 @@ This repo is ready to deploy to Render as a single Docker web service. The conta
 2. In Render, create a new Blueprint service and point it at the repo.
 3. Render will detect [`render.yaml`](render.yaml) and create:
    - one Docker web service
-   - one persistent disk mounted at `/data`
 4. In Render, set the required secret:
 
 - `GROQ_API_KEYS` required, comma-separated keys are supported
@@ -69,7 +68,7 @@ This repo is ready to deploy to Render as a single Docker web service. The conta
 
 Recommended environment values are already defined in `render.yaml`:
 
-- `DB_FAISS_BASE=/data/vectorstore`
+- `DB_FAISS_BASE=/tmp/vectorstore`
 - `EMBED_MODEL=BAAI/bge-small-en-v1.5`
 - `EMBED_BATCH_SIZE=4`
 - `RAG_MAX_PDF_PAGES=80`
@@ -83,7 +82,8 @@ After deploy:
 Important notes:
 
 - Render free instances spin down when idle, so the first request can be slow.
-- Uploaded PDFs and generated indexes are stored on the mounted disk at `/data`.
+- On the free plan, uploaded PDFs and generated indexes are stored in ephemeral storage at `/tmp/vectorstore` and will be lost after restarts or redeploys.
+- If you need persistent uploaded documents and FAISS indexes on Render, switch to a paid plan and add a disk, then set `DB_FAISS_BASE=/data/vectorstore`.
 - Do not commit `backend/.env`; set secrets in Render instead.
 
 ## Railway Deployment
