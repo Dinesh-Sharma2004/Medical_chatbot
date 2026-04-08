@@ -52,6 +52,40 @@ docker build -t medical-chatbot .
 docker run --env-file backend/.env -p 8000:8000 medical-chatbot
 ```
 
+## Render Deployment
+
+This repo is ready to deploy to Render as a single Docker web service. The container builds the React frontend, serves it from FastAPI, and stores uploaded PDFs plus the FAISS index on a persistent disk.
+
+1. Push this project to GitHub.
+2. In Render, create a new Blueprint service and point it at the repo.
+3. Render will detect [`render.yaml`](render.yaml) and create:
+   - one Docker web service
+   - one persistent disk mounted at `/data`
+4. In Render, set the required secret:
+
+- `GROQ_API_KEYS` required, comma-separated keys are supported
+
+5. Deploy the service.
+
+Recommended environment values are already defined in `render.yaml`:
+
+- `DB_FAISS_BASE=/data/vectorstore`
+- `EMBED_MODEL=BAAI/bge-small-en-v1.5`
+- `EMBED_BATCH_SIZE=4`
+- `RAG_MAX_PDF_PAGES=80`
+- `GROQ_MODEL=llama-3.1-8b-instant`
+
+After deploy:
+
+- App: `https://<your-render-service>.onrender.com/`
+- Health: `https://<your-render-service>.onrender.com/api/health`
+
+Important notes:
+
+- Render free instances spin down when idle, so the first request can be slow.
+- Uploaded PDFs and generated indexes are stored on the mounted disk at `/data`.
+- Do not commit `backend/.env`; set secrets in Render instead.
+
 ## Railway Deployment
 
 1. Login and initialize:
@@ -109,6 +143,10 @@ npx @railway/cli up --service backend
 - `GET /api/source/{doc_id}`
 
 ## Troubleshooting
+
+- Render deploy fails because of large local files:
+  - Ensure generated folders like `backend/data/` and `vectorstore/` are not committed.
+  - This repo's `.dockerignore` excludes local runtime data and `.env` files from the build context.
 
 - `{"detail":"Not Found"}` for `/app/health`:
   - Use `/api/health` instead.

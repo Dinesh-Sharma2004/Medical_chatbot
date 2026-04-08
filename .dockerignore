@@ -1,9 +1,7 @@
 # Global ignores
 .git
 .gitignore
-Dockerfile
 docker-compose.yml
-README.md
 *.log
 *.tmp
 *.swp
@@ -27,6 +25,8 @@ build/
 # Environment files
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 
 # Local runtime folders

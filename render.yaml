@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: medical-chatbot
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    disk:
+      name: medical-chatbot-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: DB_FAISS_BASE
+        value: /data/vectorstore
+      - key: EMBED_MODEL
+        value: BAAI/bge-small-en-v1.5
+      - key: EMBED_BATCH_SIZE
+        value: "4"
+      - key: RAG_MAX_PDF_PAGES
+        value: "80"
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: GROQ_API_KEYS
+        sync: false
