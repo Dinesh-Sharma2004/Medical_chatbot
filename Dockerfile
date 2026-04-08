@@ -13,7 +13,10 @@ RUN npm run build
 FROM python:3.11-slim AS backend
 
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    DB_FAISS_BASE=/tmp/vectorstore \
+    HF_HOME=/tmp/huggingface \
+    XDG_CACHE_HOME=/tmp/.cache
 
 WORKDIR /app
 

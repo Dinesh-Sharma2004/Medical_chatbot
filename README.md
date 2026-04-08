@@ -1,3 +1,13 @@
+---
+title: Medical Chatbot
+emoji: 🩺
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+short_description: FastAPI + React medical chatbot with PDF upload and Groq-powered RAG.
+---
+
 # Medical Chatbot (FastAPI + React + RAG)
 
 Medical Chatbot is a full-stack app that lets users upload PDF documents, build a FAISS vector index, and ask medical questions with Groq-powered responses.
@@ -51,6 +61,37 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 docker build -t medical-chatbot .
 docker run --env-file backend/.env -p 8000:8000 medical-chatbot
 ```
+
+## Hugging Face Spaces
+
+This project is set up to run as a Docker Space on Hugging Face.
+
+1. Create a new Space on Hugging Face.
+2. Choose `Docker` as the SDK.
+3. Connect or upload this repository to the Space.
+4. In the Space `Settings` page, add this secret:
+
+- `GROQ_API_KEYS`
+
+5. Let the Space build automatically after the push.
+
+How this runs on the free Hugging Face tier:
+
+- The app starts from the root `Dockerfile`.
+- Hugging Face reads the YAML block at the top of this `README.md`.
+- The app is exposed on port `8000`.
+- FAISS data and model caches are stored under `/tmp`, which is ephemeral.
+
+Important limitation:
+
+- On free CPU Spaces, disk is not persistent. Uploaded PDFs, embeddings cache, and FAISS indexes will be lost when the Space rebuilds or restarts.
+
+Recommended repo flow:
+
+1. Create a Docker Space named something like `medical-chatbot`.
+2. Push this repository to the Space repo, or duplicate the GitHub repo contents into the Space repo.
+3. Add `GROQ_API_KEYS` in Hugging Face Space secrets.
+4. Open the Space URL once the build finishes.
 
 ## Render Deployment
 
