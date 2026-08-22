@@ -1,0 +1,4 @@
+model,ok,questions,medical_correctness,groundedness,completeness,safety,biomedical_grounding,context_coverage,hallucination_safety,unsupported_sentence_rate,quality_score,speed_score,quality_speed_ratio,balanced_score,latency_score,avg_latency_sec,avg_prompt_tokens,avg_completion_tokens,weighted_score,error
+llama-3.1-8b-instant,True,2,,,,,2.58,3.13,3.92,0.271,3.029,4.77,0.635,3.705,4.77,0.857,469.0,100.0,3.204,
+openai/gpt-oss-20b,True,2,,,,,1.0,1.0,1.0,1.0,1.0,5.0,0.2,1.667,5.0,0.833,506.0,100.0,1.4,
+llama-3.3-70b-versatile,True,2,,,,,3.0,3.71,3.6,0.35,3.331,1.0,3.331,1.538,1.0,1.247,469.0,77.0,3.098,

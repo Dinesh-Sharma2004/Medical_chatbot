@@ -1,17 +1,17 @@
 // ChatInput.jsx
 import React from "react";
-import { Send, X } from "lucide-react";
+import { Lock, Send, X } from "lucide-react";
 
-export default function ChatInput({ input, setInput, loading, onSubmit, onCancel }) {
+export default function ChatInput({ input, setInput, loading, onSubmit, onCancel, disabled = false }) {
   return (
     <div className="p-6 bg-white dark:bg-slate-900 border-t-2 border-gray-200 dark:border-cyan-500/20">
       <div className="flex gap-4">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && onSubmit()}
-          placeholder="Type your medical question..."
-          disabled={loading}
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && !disabled && onSubmit()}
+          placeholder={disabled ? "Sign in to ask medical questions" : "Type your medical question..."}
+          disabled={loading || disabled}
           className="flex-1 px-6 py-4 rounded-xl border-2 border-gray-300 dark:border-gray-700
            bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white
            focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/20
@@ -22,7 +22,7 @@ export default function ChatInput({ input, setInput, loading, onSubmit, onCancel
         {!loading ? (
           <button
             onClick={onSubmit}
-            disabled={!input.trim()}
+            disabled={!input.trim() || disabled}
             className="group relative px-8 py-4 rounded-xl font-bold text-white text-lg
                        bg-gradient-to-r from-cyan-600 to-blue-600
                        hover:shadow-2xl hover:shadow-cyan-500/30
@@ -44,7 +44,10 @@ export default function ChatInput({ input, setInput, loading, onSubmit, onCancel
       </div>
 
       <div className="flex items-center justify-between mt-4 text-xs text-gray-500 dark:text-gray-400">
-        <span>Press Enter to send • Shift + Enter for new line</span>
+        <span className="flex items-center gap-2">
+          {disabled ? <Lock className="w-3.5 h-3.5" /> : null}
+          {disabled ? "Authentication required" : "Press Enter to send • Shift + Enter for new line"}
+        </span>
         <span>{input.length} / 2000 characters</span>
       </div>
     </div>

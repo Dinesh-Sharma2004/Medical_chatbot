@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: medical-chatbot-alerts
+  namespace: medical-chatbot
+spec:
+  groups:
+    - name: medical-chatbot.rules
+      rules:
+        - alert: BackendHighLatency
+          expr: histogram_quantile(0.95, sum(rate(medical_chatbot_request_duration_seconds_bucket{path="/api/ask/stream"}[5m])) by (le)) > 3
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Backend RAG latency is high
+            description: 95th percentile request latency for RAG responses is above 3 seconds.
+        - alert: BackendHighErrorRate
+          expr: sum(rate(medical_chatbot_requests_total{status=~"5.."}[5m])) / sum(rate(medical_chatbot_requests_total[5m])) > 0.01
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Backend error rate is too high
+            description: More than 1% of requests are returning 5xx errors.
+        - alert: BackendDown
+          expr: absent(up{job="backend"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: Backend scrape target missing
+            description: Prometheus cannot scrape the backend metrics endpoint.

@@ -10,33 +10,43 @@ short_description: Medical chatbot with PDF upload and Groq RAG.
 
 # Medical Chatbot (FastAPI + React + RAG)
 
-Medical Chatbot is a full-stack app that lets users upload PDF documents, build a FAISS vector index, and ask medical questions with Groq-powered responses.
+Medical Chatbot is a full-stack, microservice-oriented app that lets users upload PDF documents, build a FAISS vector index asynchronously, and ask medical questions with Groq-powered responses.
 
 ## Stack
 
-- Backend: FastAPI, LangChain, FAISS
+- API service: FastAPI, LangChain, FAISS retrieval, Groq chat
+- Auth service: FastAPI, Postgres-backed accounts, Google Sign-In, signed bearer tokens
+- Ingestion worker service: Redis/RQ jobs, PDF extraction, embeddings, FAISS rebuilds
+- Queue: Redis
 - Frontend: React + Vite
 - Embeddings: FastEmbed (`BAAI/bge-small-en-v1.5`)
 - LLM: Groq API
-- Deployment: Railway (single Docker service)
+- Deployment: Docker, Kubernetes, GitLab CI/CD, AWS EKS
 
 ## Project Structure
 
 - `backend/` FastAPI app, ingestion, RAG chain
+- `backend/ingest_worker.py` background ingestion worker entrypoint
+- `backend/job_store.py` shared upload job status store
 - `frontend/` React app
-- `Dockerfile` builds frontend and serves with backend
+- `docker/` production Dockerfiles for backend and frontend
+- `k8s/` Kubernetes manifests for backend, frontend, ingress, HPA, and alerting
+- `testing/` automated tests plus evaluation and verification reports
+- `.gitlab-ci.yml` GitLab pipeline for test, image build/push, and EKS deploy
+- `ops/production-guide.md` end-to-end production deployment guide
 - `docker-compose.yml` local container orchestration
 
 ## Local Run
 
 1. Create backend environment file at `backend/.env`.
-2. Install backend dependencies:
+2. Use Python `3.11` or `3.12` for the backend virtual environment.
+3. Install backend dependencies:
 
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-3. Install frontend dependencies:
+4. Install frontend dependencies:
 
 ```bash
 cd frontend
@@ -45,15 +55,33 @@ npm run build
 cd ..
 ```
 
-4. Start API:
+5. Start API:
 
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-5. Open:
+6. Open:
 - `http://localhost:8000/`
 - Health: `http://localhost:8000/api/health`
+- Metrics: `http://localhost:8000/metrics`
+
+Recommended local indexing settings:
+
+- `EMBED_BATCH_SIZE=32`
+- `EMBED_THREADS=4`
+- `EMBED_PARALLEL=2`
+- `INGEST_MAX_WORKERS=8`
+
+## Testing
+
+Tests and generated reports live under `testing/`.
+
+```bash
+python -m unittest testing.tests.test_api
+```
+
+LLM evaluation reports are written to `testing/reports/evaluations/` by default.
 
 ## Docker
 
@@ -61,6 +89,98 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 docker build -t medical-chatbot .
 docker run --env-file backend/.env -p 8000:8000 medical-chatbot
 ```
+
+For the full local product stack with multiple backend nodes, a gateway, and telemetry:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+
+- `backend-1`, `backend-2`, `backend-3` sharing the upload and vectorstore volumes
+- `ingest-worker` consuming Redis jobs and rebuilding FAISS outside the API request path
+- `redis` queue for durable ingestion dispatch
+- `backend` gateway on `http://localhost:8000`
+- `frontend` on `http://localhost:8080`
+- `prometheus` on `http://localhost:9090`
+- `grafana` on `http://localhost:3000`
+
+Default Grafana login:
+
+- username: `admin`
+- password: `admin`
+
+If port `8000` is already busy on your machine, use the included alternate-port override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ports.override.yml up --build
+```
+
+This maps:
+
+- backend to `http://localhost:8010`
+- frontend to `http://localhost:8081`
+
+You can also override telemetry ports with `PROMETHEUS_HOST_PORT` and `GRAFANA_HOST_PORT`.
+
+## Kubernetes
+
+The Kubernetes manifests deploy separate API, ingestion worker, Redis, frontend,
+Prometheus, and Grafana services. For AWS/EKS, back the `ReadWriteMany` PVCs with
+EFS or another RWX storage class so API and worker pods can share uploaded PDFs
+and the live vectorstore safely.
+
+Base manifests:
+
+```bash
+kubectl apply -k k8s
+```
+
+Local cluster workflow:
+
+```bash
+docker build -f docker/backend.Dockerfile -t medical-chatbot-backend:local .
+docker build -f docker/frontend.Dockerfile -t medical-chatbot-frontend:local .
+kubectl apply -k k8s/overlays/local
+```
+
+Helpful port-forwards:
+
+```bash
+kubectl -n medical-chatbot port-forward svc/frontend 8080:80
+kubectl -n medical-chatbot port-forward svc/backend 8000:8000
+kubectl -n medical-chatbot port-forward svc/prometheus 9090:9090
+kubectl -n medical-chatbot port-forward svc/grafana 3000:3000
+```
+
+Optional Prometheus Operator resources remain available at `k8s/overlays/operator-monitoring`.
+
+## GitLab CI/CD
+
+This repository includes a GitLab-first pipeline in `.gitlab-ci.yml`.
+
+What the pipeline does:
+
+1. Installs backend dependencies and runs `python -m compileall backend`.
+2. Installs frontend dependencies and runs `npm run build`.
+3. Builds backend and frontend images from `docker/backend.Dockerfile` and `docker/frontend.Dockerfile`.
+4. Pushes both images to the GitLab Container Registry.
+5. Offers a manual deploy job for the default branch that applies `k8s/` to EKS and rolls the deployments forward.
+
+Required GitLab CI/CD variables:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `EKS_CLUSTER_NAME`
+- `GROQ_API_KEYS`
+
+Notes:
+
+- `CI_REGISTRY`, `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD`, and `CI_REGISTRY_IMAGE` are built-in GitLab variables.
+- The deploy job creates or updates the Kubernetes secrets `gitlab-registry` and `medical-chatbot-secrets`.
+- The deploy job applies the full Kustomize bundle with `kubectl apply -k k8s`.
 
 ## Hugging Face Spaces
 
@@ -97,7 +217,7 @@ Recommended repo flow:
 
 This repo is ready to deploy to Render as a single Docker web service. The container builds the React frontend, serves it from FastAPI, and stores uploaded PDFs plus the FAISS index on a persistent disk.
 
-1. Push this project to GitHub.
+1. Push this project to your connected Git provider repository.
 2. In Render, create a new Blueprint service and point it at the repo.
 3. Render will detect [`render.yaml`](render.yaml) and create:
    - one Docker web service
@@ -177,11 +297,31 @@ npx @railway/cli up --service backend
 ## API Endpoints
 
 - `GET /api/health`
+- `GET /metrics`
+- `GET /api/auth/config`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/google`
+- `GET /api/auth/me`
+- `GET /api/chat-history`
+- `PUT /api/chat-history`
 - `POST /api/upload`
 - `GET /api/upload/status/{job_id}`
+- `POST /api/upload/cancel/{job_id}`
+- `DELETE /api/upload/{job_id}`
 - `POST /api/ask`
 - `POST /api/ask/stream`
 - `GET /api/source/{doc_id}`
+
+## Authentication
+
+Email/password authentication works locally without extra providers. In the full stack, users and chat history are stored in Postgres through `AUTH_DATABASE_URL`. If that variable is unset, the backend falls back to local SQLite at `backend/data/medibot_auth.sqlite3`.
+
+Recommended production variables:
+
+- `AUTH_SECRET`: required for stable, secure token signing
+- `AUTH_DATABASE_URL`: Postgres connection string for accounts and chat history
+- `GOOGLE_CLIENT_ID`: enables Google Sign-In in the frontend and backend verifier
 
 ## Troubleshooting
 
@@ -209,3 +349,7 @@ npx @railway/cli up --service backend
 
 - Never commit real API keys.
 - Rotate keys immediately if leaked.
+
+## Production Guide
+
+For the full CI/CD, Kubernetes, SLA, monitoring, autoscaling, and security setup, see [ops/production-guide.md](ops/production-guide.md).

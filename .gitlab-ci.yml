@@ -1,0 +1,104 @@
+cstages:
+  - test
+  - package
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+  K8S_NAMESPACE: medical-chatbot
+  KUBECTL_VERSION: v1.31.0
+  BACKEND_IMAGE: "$CI_REGISTRY_IMAGE/backend"
+  FRONTEND_IMAGE: "$CI_REGISTRY_IMAGE/frontend"
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+
+backend-test:
+  stage: test
+  image: python:3.11-slim
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key: "pip-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+  script:
+    - python -m pip install --upgrade pip
+    - pip install -r backend/requirements.txt
+    - python -m compileall backend
+    - python -m unittest testing.tests.test_ingest testing.tests.test_api
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+frontend-build:
+  stage: test
+  image: node:20
+  cache:
+    key: "npm-$CI_COMMIT_REF_SLUG"
+    paths:
+      - frontend/.npm/
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+docker-build-and-push:
+  stage: package
+  image: docker:24.0.2
+  services:
+    - docker:24-dind
+  needs:
+    - backend-test
+    - frontend-build
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+  script:
+    - docker build -f docker/backend.Dockerfile -t "$BACKEND_IMAGE:$IMAGE_TAG" .
+    - docker build -f docker/frontend.Dockerfile -t "$FRONTEND_IMAGE:$IMAGE_TAG" .
+    - docker push "$BACKEND_IMAGE:$IMAGE_TAG"
+    - docker push "$FRONTEND_IMAGE:$IMAGE_TAG"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        docker tag "$BACKEND_IMAGE:$IMAGE_TAG" "$BACKEND_IMAGE:latest"
+        docker tag "$FRONTEND_IMAGE:$IMAGE_TAG" "$FRONTEND_IMAGE:latest"
+        docker push "$BACKEND_IMAGE:latest"
+        docker push "$FRONTEND_IMAGE:latest"
+      fi
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+
+deploy-eks:
+  stage: deploy
+  image: python:3.11-slim
+  needs:
+    - docker-build-and-push
+  environment:
+    name: production
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends curl ca-certificates
+    - rm -rf /var/lib/apt/lists/*
+    - python -m pip install --no-cache-dir awscli
+    - curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+    - chmod +x /usr/local/bin/kubectl
+    - aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+  script:
+    - kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$K8S_NAMESPACE"
+    - kubectl -n "$K8S_NAMESPACE" create secret docker-registry gitlab-registry --docker-server="$CI_REGISTRY" --docker-username="$CI_REGISTRY_USER" --docker-password="$CI_REGISTRY_PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl -n "$K8S_NAMESPACE" create secret generic medical-chatbot-secrets --from-literal=GROQ_API_KEYS="$GROQ_API_KEYS" --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl apply -k k8s
+    - kubectl -n "$K8S_NAMESPACE" set image deployment/backend backend="$BACKEND_IMAGE:$IMAGE_TAG"
+    - kubectl -n "$K8S_NAMESPACE" set image deployment/ingest-worker ingest-worker="$BACKEND_IMAGE:$IMAGE_TAG"
+    - kubectl -n "$K8S_NAMESPACE" set image deployment/frontend frontend="$FRONTEND_IMAGE:$IMAGE_TAG"
+    - kubectl -n "$K8S_NAMESPACE" rollout status deployment/backend --timeout=5m
+    - kubectl -n "$K8S_NAMESPACE" rollout status deployment/ingest-worker --timeout=5m
+    - kubectl -n "$K8S_NAMESPACE" rollout status deployment/frontend --timeout=5m
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual

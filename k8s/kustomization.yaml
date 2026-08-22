@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medical-chatbot
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - redis.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - backend-hpa.yaml
+  - backend-pdb.yaml
+  - ingest-worker-deployment.yaml
+  - ingest-worker-hpa.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - frontend-hpa.yaml
+  - frontend-pdb.yaml
+  - ingress.yaml
+  - monitoring/prometheus-configmap.yaml
+  - monitoring/prometheus-deployment.yaml
+  - monitoring/prometheus-service.yaml
+  - monitoring/grafana-datasource-configmap.yaml
+  - monitoring/grafana-dashboard-provider-configmap.yaml
+  - monitoring/grafana-deployment.yaml
+  - monitoring/grafana-service.yaml

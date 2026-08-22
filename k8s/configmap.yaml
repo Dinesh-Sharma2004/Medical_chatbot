@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medical-chatbot-config
+  namespace: medical-chatbot
+data:
+  DB_FAISS_BASE: /app/vectorstore
+  REDIS_URL: redis://redis:6379/0
+  INGEST_QUEUE_NAME: ingest
+  INGEST_QUEUE_REQUIRED: "true"
+  EMBED_MODEL: BAAI/bge-small-en-v1.5
+  EMBED_BATCH_SIZE: "32"
+  EMBED_THREADS: "4"
+  EMBED_PARALLEL: "2"
+  INGEST_MAX_WORKERS: "8"
+  RAG_MAX_PDF_PAGES: "80"
+  GROQ_MODEL: llama-3.1-8b-instant
+  UVICORN_WORKERS: "1"

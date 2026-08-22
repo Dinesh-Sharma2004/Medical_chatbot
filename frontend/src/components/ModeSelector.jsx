@@ -2,7 +2,7 @@
 import React from "react";
 import { Trash2, Database, Brain, Shield } from "lucide-react";
 
-export default function ModeSelector({ mode, setMode, clearHistory }) {
+export default function ModeSelector({ mode, setMode, clearHistory, children }) {
   const modeConfig = {
     basic: {
       icon: Database,
@@ -91,6 +91,12 @@ export default function ModeSelector({ mode, setMode, clearHistory }) {
             Clear History
           </button>
         </div>
+
+        {children && (
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            {children}
+          </div>
+        )}
 
         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">

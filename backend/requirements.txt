@@ -7,6 +7,14 @@ langchain-community==0.3.29
 langchain-text-splitters==0.3.11
 faiss-cpu==1.12.0
 fastembed==0.4.2
+sentence-transformers==3.0.1
 pypdf==6.0.0
+pypdfium2==5.7.1
+pdf2image==1.17.0
+rapidocr-onnxruntime==1.2.3
 httpx==0.28.1
+psycopg[binary]==3.2.9
 python-multipart==0.0.20
+prometheus-client==0.22.1
+redis==5.2.1
+rq==2.1.0

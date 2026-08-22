@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: medical-chatbot
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: Medical Chatbot
+        folder: Medical Chatbot
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards

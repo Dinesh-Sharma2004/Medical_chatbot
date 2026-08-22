@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   startUpload,
+  startBatchUpload,
   getUploadStatus,
   cancelUpload,
   deleteUpload,
@@ -10,7 +11,72 @@ import {
 const STORAGE_KEY = "medibot_jobs_v1";
 const RESUME_KEY = "last_upload_job_id";
 
-export function useMultiUpload() {
+function derivePhase(job = {}) {
+  const status = String(job.status || "").toLowerCase();
+  const detail = String(job.detail || "").toLowerCase();
+  const progress = Number(job.progress || 0);
+
+  if (status === "completed") {
+    return {
+      phase: "ready",
+      phaseLabel: "Ready to chat",
+      summary: job.detail || "Document indexing finished.",
+    };
+  }
+
+  if (status === "error" || status === "failed") {
+    return {
+      phase: "failed",
+      phaseLabel: "Indexing failed",
+      summary: job.detail || job.error || "The upload finished, but indexing did not complete.",
+    };
+  }
+
+  if (status === "canceled") {
+    return {
+      phase: "canceled",
+      phaseLabel: "Canceled",
+      summary: job.detail || "Upload or indexing was canceled.",
+    };
+  }
+
+  if (detail.includes("queued")) {
+    return {
+      phase: "queued",
+      phaseLabel: "Queued",
+      summary: job.detail || "The file is waiting for the ingestion worker.",
+    };
+  }
+
+  if (
+    detail.includes("extract") ||
+    detail.includes("index") ||
+    detail.includes("worker") ||
+    detail.includes("vector") ||
+    progress > 0
+  ) {
+    return {
+      phase: "indexing",
+      phaseLabel: "Indexing",
+      summary: job.detail || "The PDF is being processed into the vector database.",
+    };
+  }
+
+  return {
+    phase: "uploaded",
+    phaseLabel: "Uploaded",
+    summary: job.detail || "The file upload finished and indexing is about to start.",
+  };
+}
+
+function normalizeJob(job = {}) {
+  return {
+    ...job,
+    ...derivePhase(job),
+  };
+}
+
+export function useMultiUpload(token) {
   const [jobs, setJobs] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
@@ -48,14 +114,17 @@ export function useMultiUpload() {
   // === Upload Multiple Files ===
   const uploadFiles = async (fileList) => {
     const arr = Array.from(fileList);
-    for (const file of arr) {
-      await addSingleFile(file);
+    if (arr.length === 0) return;
+    if (arr.length === 1) {
+      await addSingleFile(arr[0]);
+      return;
     }
+    await addBatch(arr);
   };
 
   // === Add Single File ===
   const addSingleFile = async (file) => {
-    const res = await startUpload(file);
+    const res = await startUpload(file, { token });
     if (!res || !res.ok) {
       console.warn("startUpload did not return ok:", res);
       return;
@@ -68,19 +137,52 @@ export function useMultiUpload() {
 
     persist((prev) => ({
       ...prev,
-      [jobId]: {
+      [jobId]: normalizeJob({
         jobId,
         fileName: res.filename || file.name,
         size_bytes: res.size_bytes || file.size || 0, // ✅ always set from File
-        progress: 0,
-        detail: "Starting...",
-        status: "processing",
+        progress: res.progress || 0,
+        detail: res.detail || "Queued for indexing",
+        status: res.status || "processing",
         eta: null,
         duration: null,
-      },
+      }),
     }));
 
     console.info("Started upload", jobId, res.filename);
+    startPolling();
+  };
+
+  const addBatch = async (files) => {
+    const res = await startBatchUpload(files, { token });
+    if (!res || !res.ok) {
+      console.warn("startBatchUpload did not return ok:", res);
+      return;
+    }
+
+    const jobId = res.job_id;
+    try {
+      if (jobId) localStorage.setItem(RESUME_KEY, jobId);
+    } catch (_) {}
+
+    persist((prev) => ({
+      ...prev,
+      [jobId]: normalizeJob({
+        jobId,
+        fileName: res.filename || `${files.length} PDFs`,
+        fileNames: res.filenames || files.map((file) => file.name),
+        size_bytes:
+          res.size_bytes ||
+          files.reduce((sum, file) => sum + (file.size || 0), 0),
+        progress: res.progress || 0,
+        detail: res.detail || "Queued batch for indexing",
+        status: res.status || "processing",
+        eta: null,
+        duration: null,
+      }),
+    }));
+
+    console.info("Started batch upload", jobId, res.filenames);
     startPolling();
   };
 
@@ -101,8 +203,8 @@ export function useMultiUpload() {
 
     for (const [jobId, job] of entries) {
       try {
-        const status = await getUploadStatus(jobId);
-        next[jobId] = {
+        const status = await getUploadStatus(jobId, token);
+        next[jobId] = normalizeJob({
           ...job,
           ...status,
           fileName: status.filename || job.fileName,
@@ -110,7 +212,7 @@ export function useMultiUpload() {
             status.size_bytes ??
             job.size_bytes ??
             0, // ✅ ensure never undefined
-        };
+        });
 
         const st = (status.status || "").toLowerCase();
         if (["completed", "error", "canceled"].includes(st)) {
@@ -202,8 +304,8 @@ export function useMultiUpload() {
   // === Cancel functions ===
   const cancelOne = async (jobId) => {
     try {
-      await cancelUpload(jobId);
-      await deleteUpload(jobId);
+        await cancelUpload(jobId, token);
+        await deleteUpload(jobId, token);
     } catch (err) {
       console.warn("cancel/delete failed", err);
     }
@@ -224,8 +326,8 @@ export function useMultiUpload() {
     const ids = Object.keys(jobsRef.current || {});
     for (const id of ids) {
       try {
-        await cancelUpload(id);
-        await deleteUpload(id);
+        await cancelUpload(id, token);
+        await deleteUpload(id, token);
       } catch (_) {}
     }
     persist({});

@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: medical-chatbot
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react";
-import { ENDPOINTS } from "../api";
+import { askStream } from "../api";
 
-export function useAskStream() {
+export function useAskStream(token) {
   const [isLoading, setIsLoading] = useState(false);
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState([]);
@@ -20,11 +20,9 @@ export function useAskStream() {
     controllerRef.current = controller;
 
     try {
-      const response = await fetch(ENDPOINTS.ASK_STREAM, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, mode }),
+      const response = await askStream(question, mode, {
         signal: controller.signal,
+        token,
       });
 
       if (!response.ok) {
@@ -63,7 +61,7 @@ export function useAskStream() {
 
           if (obj.type === "partial") {
             const chunk = obj.text || "";
-            if (chunk && !accumulated.endsWith(chunk)) {
+            if (chunk) {
               accumulated += chunk;
               setAnswer(accumulated);
             }
@@ -73,7 +71,7 @@ export function useAskStream() {
           if (obj.type === "done") {
             const finalText = obj.text?.trim() || accumulated;
             setAnswer(finalText);
-            setSources(obj.sources || sources);
+            if (obj.sources) setSources(obj.sources);
             setIsLoading(false);
             controllerRef.current = null;
             return;
@@ -99,7 +97,7 @@ export function useAskStream() {
     } finally {
       controllerRef.current = null;
     }
-  }, [sources]);
+  }, [token]);
 
   const cancel = useCallback(() => {
     if (controllerRef.current) {

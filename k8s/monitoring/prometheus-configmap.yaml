@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: medical-chatbot
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
+
+      - job_name: medical-chatbot-backend
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - backend:8000
+  alerts.yml: |
+    groups:
+      - name: medical-chatbot.rules
+        rules:
+          - alert: BackendHighLatency
+            expr: histogram_quantile(0.95, sum(rate(medical_chatbot_request_duration_seconds_bucket{path="/api/ask/stream"}[5m])) by (le)) > 3
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Backend RAG latency is high
+              description: 95th percentile request latency for RAG responses is above 3 seconds.
+          - alert: BackendHighErrorRate
+            expr: sum(rate(medical_chatbot_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(medical_chatbot_requests_total[5m])), 1) > 0.01
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: Backend error rate is too high
+              description: More than 1% of requests are returning 5xx errors.
+          - alert: BackendDown
+            expr: up{job="medical-chatbot-backend"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: Backend scrape target missing
+              description: Prometheus cannot scrape the backend metrics endpoint.

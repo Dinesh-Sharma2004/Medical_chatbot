@@ -1,0 +1,242 @@
+{
+  "summary": [
+    {
+      "model": "llama-3.1-8b-instant",
+      "ok": true,
+      "questions": 2,
+      "avg_latency_sec": 0.857,
+      "avg_prompt_tokens": 469.0,
+      "avg_completion_tokens": 100.0,
+      "latency_score": 4.77,
+      "biomedical_grounding": 2.58,
+      "context_coverage": 3.13,
+      "hallucination_safety": 3.92,
+      "unsupported_sentence_rate": 0.271,
+      "quality_score": 3.029,
+      "speed_score": 4.77,
+      "quality_speed_ratio": 0.635,
+      "balanced_score": 3.705,
+      "weighted_score": 3.204
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "ok": true,
+      "questions": 2,
+      "avg_latency_sec": 0.833,
+      "avg_prompt_tokens": 506.0,
+      "avg_completion_tokens": 100.0,
+      "latency_score": 5.0,
+      "biomedical_grounding": 1.0,
+      "context_coverage": 1.0,
+      "hallucination_safety": 1.0,
+      "unsupported_sentence_rate": 1.0,
+      "quality_score": 1.0,
+      "speed_score": 5.0,
+      "quality_speed_ratio": 0.2,
+      "balanced_score": 1.667,
+      "weighted_score": 1.4
+    },
+    {
+      "model": "llama-3.3-70b-versatile",
+      "ok": true,
+      "questions": 2,
+      "avg_latency_sec": 1.247,
+      "avg_prompt_tokens": 469.0,
+      "avg_completion_tokens": 77.0,
+      "latency_score": 1.0,
+      "biomedical_grounding": 3.0,
+      "context_coverage": 3.71,
+      "hallucination_safety": 3.6,
+      "unsupported_sentence_rate": 0.35,
+      "quality_score": 3.331,
+      "speed_score": 1.0,
+      "quality_speed_ratio": 3.331,
+      "balanced_score": 1.538,
+      "weighted_score": 3.098
+    }
+  ],
+  "rows": [
+    {
+      "question_index": 1,
+      "question": "From the retrieved anatomy text, describe the classification of joints with examples.",
+      "model": "llama-3.1-8b-instant",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 72,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p72_i144"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 68,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p68_i137"
+        }
+      ],
+      "ok": true,
+      "answer": "According to the provided text, the classification of joints is based on their structural characteristics. The text mentions that fibrous joints are the most commonly followed type. Fibrous joints are further divided into three subtypes:\n\n1. Sutures: These are found in the skull and are immovable. Examples include:\n   - Plane sutures (e.g., internasal suture)\n   - Serrate sutures (e.g., interparietal suture)\n   - Squamous sutures (",
+      "latency_sec": 1.026,
+      "prompt_tokens": 498,
+      "completion_tokens": 100,
+      "total_tokens": 598,
+      "biomedical_grounding": 2.81,
+      "context_coverage": 2.87,
+      "hallucination_safety": 4.33,
+      "unsupported_sentence_rate": 0.167,
+      "avg_answer_context_similarity": 0.553,
+      "avg_context_answer_similarity": 0.561,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "1/6 answer sentence(s) below support threshold 0.52."
+    },
+    {
+      "question_index": 1,
+      "question": "From the retrieved anatomy text, describe the classification of joints with examples.",
+      "model": "llama-3.3-70b-versatile",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 72,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p72_i144"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 68,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p68_i137"
+        }
+      ],
+      "ok": true,
+      "answer": "According to the provided context, the structural classification of joints is most commonly followed. Joints can be classified into different types based on the type of tissue that connects the bones. \n\nOne type of joint mentioned is the fibrous joint, where bones are joined by fibrous tissue. Fibrous joints can be further subdivided into three subtypes, but only one is described in the given context: \n\n1. Sutures: These are immovable joints found in the skull and can be classified into different",
+      "latency_sec": 1.245,
+      "prompt_tokens": 498,
+      "completion_tokens": 100,
+      "total_tokens": 598,
+      "biomedical_grounding": 3.58,
+      "context_coverage": 3.94,
+      "hallucination_safety": 4.2,
+      "unsupported_sentence_rate": 0.2,
+      "avg_answer_context_similarity": 0.64,
+      "avg_context_answer_similarity": 0.681,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "1/5 answer sentence(s) below support threshold 0.52."
+    },
+    {
+      "question_index": 1,
+      "question": "From the retrieved anatomy text, describe the classification of joints with examples.",
+      "model": "openai/gpt-oss-20b",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 72,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p72_i144"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 68,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p68_i137"
+        }
+      ],
+      "ok": true,
+      "answer": "",
+      "latency_sec": 0.83,
+      "prompt_tokens": 535,
+      "completion_tokens": 100,
+      "total_tokens": 635,
+      "biomedical_grounding": 1.0,
+      "context_coverage": 1.0,
+      "hallucination_safety": 1.0,
+      "unsupported_sentence_rate": 1.0,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "No answer sentences or no retrieved context chunks to compare."
+    },
+    {
+      "question_index": 2,
+      "question": "From the retrieved anatomy text, explain the structure and functions of epithelial tissue.",
+      "model": "llama-3.1-8b-instant",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 15,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p15_i20"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 14,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p14_i17"
+        }
+      ],
+      "ok": true,
+      "answer": "Unfortunately, the provided context does not mention the structure and functions of epithelial tissue. The text only discusses the following topics:\n\n1. Genetics (study of information present in chromosomes)\n2. Clavicle and Lung (briefly mentioned as body parts)\n3. Heart (briefly mentioned as a body part)\n4. Embryology (study of prenatal developmental changes)\n5. Histology (study of structures with the aid of a microscope)\n6. Surface anatomy (study of deeper parts of",
+      "latency_sec": 0.687,
+      "prompt_tokens": 440,
+      "completion_tokens": 100,
+      "total_tokens": 540,
+      "biomedical_grounding": 2.34,
+      "context_coverage": 3.4,
+      "hallucination_safety": 3.5,
+      "unsupported_sentence_rate": 0.375,
+      "avg_answer_context_similarity": 0.501,
+      "avg_context_answer_similarity": 0.62,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "3/8 answer sentence(s) below support threshold 0.52."
+    },
+    {
+      "question_index": 2,
+      "question": "From the retrieved anatomy text, explain the structure and functions of epithelial tissue.",
+      "model": "llama-3.3-70b-versatile",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 15,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p15_i20"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 14,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p14_i17"
+        }
+      ],
+      "ok": true,
+      "answer": "The provided context is insufficient to explain the structure and functions of epithelial tissue. The text only discusses various branches of anatomy, such as embryology, histology, surface anatomy, and radiographic and imaging anatomy, but does not provide information about epithelial tissue.",
+      "latency_sec": 1.248,
+      "prompt_tokens": 440,
+      "completion_tokens": 54,
+      "total_tokens": 494,
+      "biomedical_grounding": 2.41,
+      "context_coverage": 3.47,
+      "hallucination_safety": 3.0,
+      "unsupported_sentence_rate": 0.5,
+      "avg_answer_context_similarity": 0.509,
+      "avg_context_answer_similarity": 0.628,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "1/2 answer sentence(s) below support threshold 0.52."
+    },
+    {
+      "question_index": 2,
+      "question": "From the retrieved anatomy text, explain the structure and functions of epithelial tissue.",
+      "model": "openai/gpt-oss-20b",
+      "context_sources": [
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 15,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p15_i20"
+        },
+        {
+          "filename": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf",
+          "page": 14,
+          "doc_id": "BD Chaurasia's Handbook of General Anatomy ( PDFDrive ).pdf_p14_i17"
+        }
+      ],
+      "ok": true,
+      "answer": "",
+      "latency_sec": 0.836,
+      "prompt_tokens": 477,
+      "completion_tokens": 100,
+      "total_tokens": 577,
+      "biomedical_grounding": 1.0,
+      "context_coverage": 1.0,
+      "hallucination_safety": 1.0,
+      "unsupported_sentence_rate": 1.0,
+      "medical_judge_model": "NeuML/pubmedbert-base-embeddings",
+      "notes": "No answer sentences or no retrieved context chunks to compare."
+    }
+  ]
+}

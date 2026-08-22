@@ -11,6 +11,7 @@ venv/
 ENV/
 env/
 .venv/
+.venv*/
 
 
 *.db
@@ -21,6 +22,10 @@ env/
 
 
 .cache/
+.tmp/
+.run/
+.verify-logs/
+medibot-tests-*/
 *.mypy_cache/
 *.pytest_cache/
 
@@ -53,7 +58,11 @@ logs/
 backend/data/
 backend/vectorstore/
 vectorstore/
+models-cache/
 .history/
 frontend_backup/
+eval_results/
+testing/reports/runtime/
+testing/reports/verification/
 
 

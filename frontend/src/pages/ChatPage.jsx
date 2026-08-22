@@ -1,15 +1,15 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { health } from "../api";
+import { health, fetchSourcePdf } from "../api";
 import { pushToast } from "../components/ToastContainer";
 import ModeSelector from "../components/ModeSelector";
 import ChatInput from "../components/ChatInput";
 import EmptyState from "../components/EmptyState";
 import { useAskStream } from "../hooks/useAskStream";
-import { Sparkles, Database, ExternalLink, ArrowDown } from "lucide-react";
+import { Sparkles, Database, ExternalLink, ArrowDown, LoaderCircle } from "lucide-react";
 
 const STORAGE_KEY = "medibot_conversation_v1";
 
-export default function ChatPage() {
+export default function ChatPage({ token }) {
   const [messages, setMessages] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -20,7 +20,8 @@ export default function ChatPage() {
 
   const [mode, setMode] = useState("basic");
   const [input, setInput] = useState("");
-  const { ask, answer, isLoading, sources, cancel, setAnswer } = useAskStream();
+  const { ask, answer, isLoading, sources, cancel, setAnswer } = useAskStream(token);
+  const [pdfLoading, setPdfLoading] = useState({});
 
   const chatRef = useRef(null);
   const scrollLockRef = useRef(false);
@@ -76,14 +77,113 @@ export default function ChatPage() {
   // === 🔹 Streaming updates without removing previous ===
   useEffect(() => {
     if (!isLoading || answer == null) return;
+    const cleanRaw = normalizeRawSources(sources);
     setMessages((prev) =>
       prev.map((m) =>
         m.streaming && (m.mode || "basic") === mode
-          ? { ...m, text: answer }
+          ? { ...m, text: answer, sources: normalizeSources(sources), rawSources: cleanRaw }
           : m
       )
     );
-  }, [answer, isLoading, mode]);
+  }, [answer, sources, isLoading, mode]);
+
+  function sourceCacheKey(source = {}) {
+    return `${source.pageKey || source.docId || source.filename || "source"}:${source.page || "?"}`;
+  }
+
+  function cleanFilename(name = "") {
+    if (!name) return "";
+    let clean = name.replace(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_(?:\d+_)?/i, "");
+    if (clean === name) {
+      clean = name.replace(/^[a-fA-F0-9]{32}_(?:\d+_)?/i, "");
+    }
+    return clean;
+  }
+
+  function cleanReasoning(text = "") {
+    let clean = text.replace(/<think>[\s\S]*?<\/think>/g, "");
+    const thinkIdx = clean.indexOf("<think>");
+    if (thinkIdx >= 0) {
+      clean = clean.substring(0, thinkIdx);
+    }
+    return clean;
+  }
+
+  function renderFormattedMessage(text, messageSources = []) {
+    if (!text) return null;
+    let cleanText = cleanReasoning(text);
+    
+    // Strip [Evidence X] citations
+    cleanText = cleanText.replace(/\s*\[Evidence\s*\d+(?:\s*,\s*\d+)*\]/gi, "");
+    
+    // Strip [p. X] citations
+    cleanText = cleanText.replace(/\s*\[p\.?\s*\d+(?:\s*,\s*\d+)*\]/gi, "");
+    
+    // Clean up any other stray bracketed citations
+    cleanText = cleanText.replace(/\s*\[Evidence\s+[^\]]+\]/gi, "");
+    cleanText = cleanText.replace(/\s*\[p\.?\s+[^\]]+\]/gi, "");
+
+    return cleanText;
+  }
+
+  function normalizeRawSources(items = []) {
+    return (items || [])
+      .map((s, index) => {
+        const page = Number(
+          s.page || s.page_number || s.page_label || s.pageLabel || s.p || s.raw_page || 0
+        ) || 0;
+        return {
+          id: `${s.page_key || s.doc_id || s.docId || s.filename || "source"}:${page || index}`,
+          page,
+          rawPage: s.raw_page,
+          pageLabel: s.page_label || s.pageLabel,
+          filename: s.filename,
+          docId: s.doc_id || s.docId,
+          pageKey: s.page_key || s.pageKey,
+          citation: s.citation,
+          snippet: s.snippet || s.text || "",
+          highlight: s.highlight || s.snippet || s.text || "",
+          matchScore: s.match_score,
+          rank: s.rank,
+          score: s.score,
+          matchedTerms: Array.isArray(s.matched_terms) ? s.matched_terms : [],
+        };
+      });
+  }
+
+  function normalizeSources(items = []) {
+    const seen = new Set();
+    return (items || [])
+      .map((s, index) => {
+        const page = Number(
+          s.page || s.page_number || s.page_label || s.pageLabel || s.p || s.raw_page || 0
+        ) || 0;
+        const normalized = {
+          id: `${s.page_key || s.doc_id || s.docId || s.filename || "source"}:${page || index}`,
+          page,
+          rawPage: s.raw_page,
+          pageLabel: s.page_label || s.pageLabel,
+          filename: s.filename,
+          docId: s.doc_id || s.docId,
+          pageKey: s.page_key || s.pageKey,
+          citation: s.citation,
+          snippet: s.snippet || s.text || "",
+          highlight: s.highlight || s.snippet || s.text || "",
+          matchScore: s.match_score,
+          rank: s.rank,
+          score: s.score,
+          matchedTerms: Array.isArray(s.matched_terms) ? s.matched_terms : [],
+        };
+        normalized.cacheKey = sourceCacheKey(normalized);
+        return normalized;
+      })
+      .filter((s) => {
+        const key = s.cacheKey;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return s.page && s.docId;
+      });
+  }
 
   // === 🔹 After streaming completes ===
   useEffect(() => {
@@ -93,11 +193,8 @@ export default function ChatPage() {
       return;
     }
 
-    const cleanSources = (sources || []).map((s) => ({
-      page: s.page || s.page_number || s.p,
-      filename: s.filename,
-      sourcePath: s.source || s.source_path,
-    }));
+    const cleanSources = normalizeSources(sources);
+    const cleanRaw = normalizeRawSources(sources);
 
     setMessages((prev) => {
       const updated = prev.map((msg) =>
@@ -107,6 +204,7 @@ export default function ChatPage() {
               text: answer.trim(),
               streaming: false,
               sources: cleanSources,
+              rawSources: cleanRaw,
             }
           : msg
       );
@@ -157,10 +255,27 @@ export default function ChatPage() {
   }
 
   // === 🔹 Open PDF Source Page ===
-  function openPdfAtPage(sourcePath, page) {
-    if (!sourcePath) return;
-    const url = `${sourcePath}#page=${page || 1}`;
-    window.open(url, "_blank");
+  async function openSourcePdf(source) {
+    const key = sourceCacheKey(source);
+    if (!source.docId || pdfLoading[key]) return;
+
+    setPdfLoading((prev) => ({ ...prev, [key]: true }));
+    try {
+      const blob = await fetchSourcePdf(source.docId, token);
+      const url = window.URL.createObjectURL(blob);
+      const page = Number(source.pageLabel || source.page || 1);
+      const targetUrl = `${url}#page=${page}`;
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      pushToast({
+        type: "error",
+        title: "Source unavailable",
+        msg: error?.message || "Failed to open source PDF",
+      });
+    } finally {
+      setPdfLoading((prev) => ({ ...prev, [key]: false }));
+    }
   }
 
   return (
@@ -210,47 +325,80 @@ export default function ChatPage() {
             >
               {filteredMessages.length === 0 && <EmptyState />}
 
-              {filteredMessages.map((m) => (
-                <div key={m.id} className="flex flex-col">
-                  <div
-                    className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm 
-                      ${
-                        m.role === "user"
-                          ? "ml-auto bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
-                          : "mr-auto bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-gray-100"
-                      } ${m.streaming ? "streaming-placeholder" : ""}`}
-                  >
-                    <p className="whitespace-pre-line text-[15px] leading-relaxed">
-                      {m.text || (m.streaming ? "MediBot is thinking…" : "")}
-                    </p>
-                  </div>
+              {filteredMessages.map((m) => {
+                const groupedSources = {};
+                if (m.role === "bot" && Array.isArray(m.sources)) {
+                  m.sources.forEach((src) => {
+                    if (!src.docId) return;
+                    if (!groupedSources[src.docId]) {
+                      groupedSources[src.docId] = {
+                        filename: src.filename || "Uploaded PDF",
+                        docId: src.docId,
+                        pages: [],
+                      };
+                    }
+                    if (!groupedSources[src.docId].pages.some((p) => p.page === src.page)) {
+                      groupedSources[src.docId].pages.push(src);
+                    }
+                  });
+                  Object.values(groupedSources).forEach((group) => {
+                    group.pages.sort((a, b) => a.page - b.page);
+                  });
+                }
 
-                  {/* === 🔹 Source Page Buttons === */}
-                  {m.role === "bot" &&
-                    Array.isArray(m.sources) &&
-                    m.sources.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2 ml-1">
-                        {m.sources.map(
-                          (s, i) =>
-                            s.page && (
+                const uniquePagesList = [];
+                if (m.role === "bot" && Array.isArray(m.sources)) {
+                  const seenKeys = new Set();
+                  m.sources.forEach((src) => {
+                    const key = `${src.docId}:${src.page}`;
+                    if (src.page && src.docId && !seenKeys.has(key)) {
+                      seenKeys.add(key);
+                      uniquePagesList.push(src);
+                    }
+                  });
+                  uniquePagesList.sort((a, b) => a.page - b.page);
+                }
+
+                return (
+                  <div key={m.id} className="flex flex-col">
+                    <div
+                      className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm 
+                        ${
+                          m.role === "user"
+                            ? "ml-auto bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                            : "mr-auto bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-gray-100"
+                        } ${m.streaming ? "streaming-placeholder" : ""}`}
+                    >
+                      <p className="whitespace-pre-line text-[15px] leading-relaxed">
+                        {m.role === "bot"
+                          ? m.text || m.streaming
+                            ? renderFormattedMessage(m.text, m.rawSources || m.sources || [])
+                            : "MediBot is thinking…"
+                          : m.text}
+                      </p>
+
+                      {m.role === "bot" && !m.streaming && uniquePagesList.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-300/40 dark:border-slate-700/50 text-xs flex flex-wrap items-center text-gray-400 dark:text-gray-500">
+                          {uniquePagesList.map((src, idx) => (
+                            <span key={src.id || idx} className="inline-flex items-center">
                               <button
-                                key={i}
-                                onClick={() => openPdfAtPage(s.sourcePath, s.page)}
-                                className="text-xs font-medium text-cyan-700 dark:text-cyan-400 
-                                           hover:underline flex items-center gap-1 bg-cyan-50/60 
-                                           dark:bg-slate-800/60 px-2 py-1 rounded-full border border-cyan-200/30 
-                                           dark:border-cyan-600/30 transition-all duration-200 hover:bg-cyan-100/60"
-                                title={`Open ${s.filename || "document"} page ${s.page}`}
+                                onClick={() => openSourcePdf(src)}
+                                className="text-blue-600 dark:text-cyan-400 hover:underline font-medium focus:outline-none"
+                                disabled={pdfLoading[sourceCacheKey(src)]}
                               >
-                                p.{s.page}
-                                <ExternalLink className="w-3 h-3 opacity-70" />
+                                {pdfLoading[sourceCacheKey(src)] ? `Loading Page ${src.page}...` : `Page ${src.page}`}
                               </button>
-                            )
-                        )}
-                      </div>
-                    )}
-                </div>
-              ))}
+                              {idx < uniquePagesList.length - 1 && <span className="mr-1.5">,</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Chat Input */}

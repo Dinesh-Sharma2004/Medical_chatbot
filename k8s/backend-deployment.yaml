@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: medical-chatbot
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      containers:
+        - name: backend
+          image: REPLACE_ME_BACKEND_IMAGE
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: medical-chatbot-config
+            - secretRef:
+                name: medical-chatbot-secrets
+          env:
+            - name: PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/backend/data
+            - name: vectorstore
+              mountPath: /app/vectorstore
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: medical-chatbot-data
+        - name: vectorstore
+          persistentVolumeClaim:
+            claimName: medical-chatbot-vectorstore
