@@ -10,7 +10,7 @@ import re
 import queue
 import time
 from time import perf_counter
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,6 +58,7 @@ logging.basicConfig(
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BACKEND_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
+ASK_TIMEOUT_SECONDS = max(30.0, float(os.getenv("ASK_TIMEOUT_SECONDS", "90")))
 
 DEFAULT_FRONTEND_DIST = os.path.normpath(
     os.path.join(BACKEND_DIR, "..", "frontend", "dist")
@@ -179,13 +180,27 @@ def _start_ingest_job(job_id: str, pdf_paths: List[str]):
             _set_job(job_id, progress=p, detail=d)
 
         try:
-            ok = create_vector_store(pdf_paths, progress_cb=cb, cancel_event=cancel_event)
+            res = create_vector_store(pdf_paths, progress_cb=cb, cancel_event=cancel_event)
+            stats = {}
+            if isinstance(res, dict):
+                ok = res.get("success", False)
+                stats = {
+                    "failed_batches": res.get("failed_batches", []),
+                    "processed_pages": res.get("processed_pages", 0),
+                    "total_pages": res.get("total_pages", 0),
+                    "processed_chunks": res.get("processed_chunks", 0),
+                    "embedded_chunks": res.get("embedded_chunks", 0),
+                }
+            else:
+                ok = res
+
             if cancel_event is not None and cancel_event.is_set():
                 _set_job(
                     job_id,
                     status="canceled",
                     detail="Ingestion canceled",
                     duration=round(time.time() - started, 2),
+                    **stats
                 )
                 return
             _set_job(
@@ -194,6 +209,7 @@ def _start_ingest_job(job_id: str, pdf_paths: List[str]):
                 progress=100 if ok else 0,
                 detail="Ready to chat" if ok else "Ingestion failed",
                 duration=round(time.time() - started, 2),
+                **stats
             )
         except Exception as e:
             logging.exception("Ingest error")
@@ -467,32 +483,53 @@ def check_exploit_guardrails(question: str) -> bool:
 async def ask(
     question: str = Form(...),
     mode: str = Form("basic"),
+    request_id: Optional[str] = Form(None),
     user: Dict[str, Any] = Depends(require_user),
 ):
     question = question.strip()
     if not question:
-        return {"answer": "Question is empty", "sources": [], "mode": mode}
+        return {"answer": "Question is empty", "sources": [], "mode": mode, "requestId": request_id}
 
     if check_exploit_guardrails(question):
         return {
             "answer": "I am a medical assistant. I can only answer medical questions or queries directly related to the uploaded document content.",
             "sources": [],
             "mode": mode,
+            "requestId": request_id,
         }
 
     if not await asyncio.to_thread(rc.get_rag_chain, mode):
-        return {"answer": "RAG not ready. Upload documents first.", "sources": [], "mode": mode}
+        return {"answer": "RAG not ready. Upload documents first.", "sources": [], "mode": mode, "requestId": request_id}
 
     try:
-        result = await asyncio.to_thread(rc.answer_query, question, mode)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(rc.answer_query, question, mode),
+            timeout=ASK_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        logging.warning("ask() timed out at %s seconds for request_id: %s", ASK_TIMEOUT_SECONDS, request_id)
+        return {
+            "answer": "I couldn't find a reliable answer to this question in the uploaded document.",
+            "sources": [],
+            "mode": mode,
+            "requestId": request_id,
+            "status": "timed_out",
+        }
     except Exception as e:
         logging.exception("ask() failure")
-        return {"answer": f"Error: {e}", "sources": [], "mode": mode}
+        return {"answer": f"Error: {e}", "sources": [], "mode": mode, "requestId": request_id}
+
+    answer = result.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        # Do not allow a provider failure to become a successful but blank response.
+        logging.error("ask() completed without an answer: %s", result.get("error", "Unknown generation error"))
+        answer = "I couldn't generate an answer right now. Please try again."
 
     return {
-        "answer": result.get("answer", ""),
+        "answer": answer,
         "sources": result.get("sources", []),
         "mode": mode,
+        "requestId": request_id,
     }
 
 # ======================================================
@@ -503,12 +540,14 @@ async def ask_stream(request: Request, user: Dict[str, Any] = Depends(require_us
     data = await request.json()
     question = data.get("question", "").strip()
     mode = (data.get("mode") or "basic").lower()
+    request_id = data.get("requestId", data.get("request_id"))
 
     if not question:
         async def _err():
             yield json.dumps({
                 "type": "error",
-                "message": "Empty question"
+                "message": "Empty question",
+                "requestId": request_id,
             }) + "\n"
         return StreamingResponse(_err(), media_type="application/x-ndjson")
 
@@ -518,12 +557,14 @@ async def ask_stream(request: Request, user: Dict[str, Any] = Depends(require_us
                 "type": "sources",
                 "sources": [],
                 "mode": mode,
+                "requestId": request_id,
             }) + "\n"
             yield json.dumps({
                 "type": "partial",
-                "text": "I am a medical assistant. I can only answer medical questions or queries directly related to the uploaded document content."
+                "text": "I am a medical assistant. I can only answer medical questions or queries directly related to the uploaded document content.",
+                "requestId": request_id,
             }) + "\n"
-            yield json.dumps({"type": "done"}) + "\n"
+            yield json.dumps({"type": "done", "requestId": request_id}) + "\n"
         return StreamingResponse(_blocked(), media_type="application/x-ndjson")
 
     st = rc.status()
@@ -531,14 +572,27 @@ async def ask_stream(request: Request, user: Dict[str, Any] = Depends(require_us
         async def _not_ready():
             yield json.dumps({
                 "type": "error",
-                "message": "RAG not ready"
+                "message": "RAG not ready",
+                "requestId": request_id,
             }) + "\n"
         return StreamingResponse(_not_ready(), media_type="application/x-ndjson")
 
-    retrieval_bundle = await asyncio.to_thread(rc.build_retrieval_bundle, question, mode)
-    sources_meta = retrieval_bundle["sources"]
-    generation_bundle = await asyncio.to_thread(rc.build_generation_bundle, question, retrieval_bundle, mode)
-    prompt = generation_bundle["prompt"]
+    try:
+        retrieval_bundle = await asyncio.to_thread(rc.build_retrieval_bundle, question, mode)
+        sources_meta = retrieval_bundle["sources"]
+        generation_bundle = await asyncio.to_thread(rc.build_generation_bundle, question, retrieval_bundle, mode)
+        prompt = generation_bundle["prompt"]
+    except Exception:
+        logging.exception("Failed to prepare RAG response")
+
+        async def _prepare_error():
+            yield json.dumps({
+                "type": "error",
+                "message": "I couldn't prepare an answer from the uploaded documents. Please try again.",
+                "requestId": request_id,
+            }) + "\n"
+
+        return StreamingResponse(_prepare_error(), media_type="application/x-ndjson")
 
     async def generator():
         # first send sources
@@ -546,36 +600,96 @@ async def ask_stream(request: Request, user: Dict[str, Any] = Depends(require_us
             "type": "sources",
             "sources": sources_meta,
             "mode": mode,
+            "requestId": request_id,
         }) + "\n"
 
         stream_queue: "queue.Queue[str | None]" = queue.Queue()
 
         def blocking_groq_stream():
+            emitted_text = False
             try:
                 for chunk in rc.stream_groq(prompt):
-                    if "text" in chunk:
+                    text = chunk.get("text")
+                    if text:
+                        emitted_text = True
                         stream_queue.put(json.dumps({
                             "type": "partial",
-                            "text": chunk["text"]
+                            "text": text,
+                            "requestId": request_id,
                         }) + "\n")
                     if "done" in chunk:
-                        stream_queue.put(json.dumps({"type": "done"}) + "\n")
                         break
+
+                if not emitted_text:
+                    # Some providers can end a stream without content. Retry once through
+                    # the normal completion API so the client never receives a blank answer.
+                    answer, error = rc.generate_with_groq(prompt)
+                    if isinstance(answer, str) and answer.strip():
+                        stream_queue.put(json.dumps({
+                            "type": "partial",
+                            "text": answer,
+                            "requestId": request_id,
+                        }) + "\n")
+                    else:
+                        logging.error("Streaming and fallback generation were empty: %s", error)
+                        stream_queue.put(json.dumps({
+                            "type": "error",
+                            "message": "I couldn't generate an answer right now. Please try again.",
+                            "requestId": request_id,
+                        }) + "\n")
+                        return
+
+                stream_queue.put(json.dumps({
+                    "type": "done",
+                    "requestId": request_id,
+                }) + "\n")
             except Exception as e:
                 logging.exception("Streaming error")
                 stream_queue.put(json.dumps({
                     "type": "error",
-                    "message": str(e)
+                    "message": str(e),
+                    "requestId": request_id,
                 }) + "\n")
             finally:
                 stream_queue.put(None)
 
         threading.Thread(target=blocking_groq_stream, daemon=True).start()
+
+        start_time = time.time()
+        timeout_seconds = ASK_TIMEOUT_SECONDS
+        timed_out = False
+
         while True:
-            item = await asyncio.to_thread(stream_queue.get)
+            # Check for client disconnect to terminate early
+            if await request.is_disconnected():
+                break
+
+            elapsed = time.time() - start_time
+            remaining = timeout_seconds - elapsed
+            if remaining <= 0:
+                timed_out = True
+                break
+
+            try:
+                item = await asyncio.wait_for(
+                    asyncio.to_thread(stream_queue.get),
+                    timeout=max(0.1, remaining)
+                )
+            except asyncio.TimeoutError:
+                timed_out = True
+                break
+
             if item is None:
                 break
             yield item
+
+        if timed_out:
+            yield json.dumps({
+                "type": "error",
+                "message": "I couldn't find a reliable answer to this question in the uploaded document.",
+                "requestId": request_id,
+                "status": "timed_out",
+            }) + "\n"
 
     return StreamingResponse(
         generator(),
@@ -596,7 +710,14 @@ if os.path.isdir(FRONTEND_DIST):
     def serve_index():
         index = os.path.join(FRONTEND_DIST, "index.html")
         if os.path.exists(index):
-            return FileResponse(index)
+            return FileResponse(
+                index,
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                }
+            )
         return JSONResponse({"detail": "Frontend not found"}, status_code=404)
 
     @app.get("/{full_path:path}", include_in_schema=False)
@@ -606,7 +727,14 @@ if os.path.isdir(FRONTEND_DIST):
 
         index = os.path.join(FRONTEND_DIST, "index.html")
         if os.path.exists(index):
-            return FileResponse(index)
+            return FileResponse(
+                index,
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                }
+            )
         return JSONResponse({"detail": "Frontend not found"}, status_code=404)
 else:
     @app.get("/", include_in_schema=False)
