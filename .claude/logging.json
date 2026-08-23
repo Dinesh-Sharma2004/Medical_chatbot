@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "std": {
+      "format": "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
+    }
+  },
+  "handlers": {
+    "console": {
+      "class": "logging.StreamHandler",
+      "formatter": "std",
+      "stream": "ext://sys.stdout"
+    },
+    "file": {
+      "class": "logging.FileHandler",
+      "formatter": "std",
+      "filename": "backend.log",
+      "mode": "a",
+      "encoding": "utf-8"
+    }
+  },
+  "root": {
+    "level": "INFO",
+    "handlers": ["console", "file"]
+  },
+  "loggers": {
+    "uvicorn": { "level": "INFO", "handlers": ["console", "file"], "propagate": false },
+    "uvicorn.error": { "level": "INFO", "handlers": ["console", "file"], "propagate": false },
+    "uvicorn.access": { "level": "INFO", "handlers": ["console", "file"], "propagate": false }
+  }
+}
