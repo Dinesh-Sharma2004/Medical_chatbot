@@ -1064,6 +1064,18 @@ def stream_groq(prompt: str):
 
                         try:
                             chunk_payload = json.loads(data_str)
+                        except Exception:
+                            continue
+
+                        # Agentic/compound systems can return HTTP 200 and then embed an
+                        # error object inside the SSE stream (e.g. a rate-limit hit). Surface
+                        # it instead of silently swallowing it and hanging on "thinking...".
+                        if isinstance(chunk_payload, dict) and chunk_payload.get("error"):
+                            err = chunk_payload["error"]
+                            detail = err.get("message") if isinstance(err, dict) else str(err)
+                            raise RuntimeError(detail or "The model provider returned an error.")
+
+                        try:
                             delta = chunk_payload["choices"][0]["delta"].get("content")
                             if delta:
                                 yield {"text": delta}
