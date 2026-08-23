@@ -60,6 +60,17 @@ INGEST_MAX_WORKERS = max(1, int(os.getenv("INGEST_MAX_WORKERS", min(8, os.cpu_co
 INGEST_EXECUTOR = os.getenv("INGEST_EXECUTOR", "threads").lower()
 INGEST_LOCK_PATH = os.path.join(DB_FAISS_BASE, ".ingest.lock")
 
+# Batching & Parallelization Configs
+PAGE_BATCH_SIZE = int(os.getenv("PAGE_BATCH_SIZE", 15))
+MAX_CONCURRENT_BATCHES = int(os.getenv("MAX_CONCURRENT_BATCHES", 3))
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", EMBED_BATCH_SIZE))
+MAX_EMBEDDING_CONCURRENCY = int(os.getenv("MAX_EMBEDDING_CONCURRENCY", 3))
+
+class IngestResult(dict):
+    def __bool__(self) -> bool:
+        return bool(self.get("success", False))
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -243,6 +254,8 @@ def _raise_if_cancelled(cancel_event: Optional[threading.Event]):
 # =========================================================
 def ocr_pdf(
     pdf_path: str,
+    first_page: int = 1,
+    last_page: Optional[int] = None,
     progress_cb: Optional[Callable[[int, str], None]] = None,
     cancel_event: Optional[threading.Event] = None,
 ) -> List[Document]:
@@ -255,11 +268,12 @@ def ocr_pdf(
         return docs
     try:
         filename = os.path.basename(pdf_path)
-        logging.info("[OCR] Running OCR on %s", filename)
+        actual_last_page = last_page if last_page is not None else (MAX_PDF_PAGES if MAX_PDF_PAGES > 0 else None)
+        logging.info("[OCR] Running OCR on %s (pages %d-%s)", filename, first_page, str(actual_last_page))
         pages = convert_from_path(
             pdf_path,
-            first_page=1,
-            last_page=MAX_PDF_PAGES if MAX_PDF_PAGES > 0 else None,
+            first_page=first_page,
+            last_page=actual_last_page,
             thread_count=4,
         )
 
@@ -269,14 +283,15 @@ def ocr_pdf(
 
         for i, img in enumerate(pages):
             _raise_if_cancelled(cancel_event)
+            actual_page_num = first_page + i
             if progress_cb and pages:
                 pct = 25 + int(65 * (i + 1) / max(1, len(pages)))
-                progress_cb(pct, f"OCR page {i + 1}/{len(pages)}...")
+                progress_cb(pct, f"OCR page {actual_page_num}...")
             try:
                 ocr_result = _RAPIDOCR_ENGINE(np.array(img))
                 lines = ocr_result[0] if isinstance(ocr_result, tuple) else ocr_result
             except Exception:
-                logging.exception("[OCR] RapidOCR failed on page %d of %s", i + 1, filename)
+                logging.exception("[OCR] RapidOCR failed on page %d of %s", actual_page_num, filename)
                 continue
 
             text_parts: List[str] = []
@@ -296,14 +311,14 @@ def ocr_pdf(
                     metadata={
                         "source": pdf_path,
                         "filename": filename,
-                        "page": i + 1,
-                        "page_label": i + 1,
-                        "page_key": f"{_safe_key(filename)}__p{i + 1}",
+                        "page": actual_page_num,
+                        "page_label": actual_page_num,
+                        "page_key": f"{_safe_key(filename)}__p{actual_page_num}",
                         "ocr": True,
                     },
                 )
             )
-        logging.info("[OCR] Extracted OCR text from %d page(s) in %s", len(docs), filename)
+        logging.info("[OCR] Extracted OCR text from %d page(s) in %s (range %d-%s)", len(docs), filename, first_page, str(actual_last_page))
     except IngestCancelled:
         raise
     except Exception:
@@ -358,113 +373,109 @@ def pdfium_pdf(pdf_path: str, cancel_event: Optional[threading.Event] = None) ->
             logging.exception("[PDFium] Failed extraction on %s", pdf_path)
         return docs
 
-# =========================================================
-# PDF → CHUNKS
-# =========================================================
-def process_pdf(
-    pdf_path: str,
-    progress_cb: Optional[Callable[[int, str], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
-    fulltext_dir: Optional[str] = None,
-) -> List[Document]:
-    filename = os.path.basename(pdf_path)
-    logging.info("[INGEST] Processing PDF: %s", filename)
-
-    _raise_if_cancelled(cancel_event)
-    # Try PDFium first (much faster C++ parser)
-    try:
-        logging.info("[INGEST] Trying PDFium primary loader for %s", filename)
-        docs = pdfium_pdf(pdf_path, cancel_event=cancel_event)
-        if MAX_PDF_PAGES > 0 and len(docs) > MAX_PDF_PAGES:
-            logging.warning(
-                "[INGEST] Truncating %s to first %d pages (had %d)",
-                filename,
-                MAX_PDF_PAGES,
-                len(docs),
-            )
-            docs = docs[:MAX_PDF_PAGES]
-        
-        # Write out fulltext files for each page
-        for d in docs:
-            if not isinstance(d.metadata, dict):
-                d.metadata = {}
-            d.metadata.setdefault("source", pdf_path)
-            d.metadata.setdefault("filename", filename)
-            page_label = rc.display_page(d.metadata.get("page"), d.metadata)
-            if page_label is not None:
-                d.metadata["page_label"] = page_label
-                d.metadata.setdefault("page_key", f"{_safe_key(filename)}__p{page_label}")
-                try:
-                    target_fulltext_dir = fulltext_dir or FULLTEXT_DIR
-                    os.makedirs(target_fulltext_dir, exist_ok=True)
-                    page_key = _safe_fulltext_key(d.metadata["page_key"])
-                    d.metadata["page_key"] = page_key
-                    with open(os.path.join(target_fulltext_dir, f"{page_key}.txt"), "w", encoding="utf-8") as f:
-                        f.write(d.page_content or "")
-                except Exception:
-                    logging.exception("[INGEST] Failed writing page text for %s page %s", filename, page_label)
-        total_chars = sum(len(d.page_content or "") for d in docs)
-        logging.info("[INGEST] PDFium loader extracted ~%d chars from %s", total_chars, filename)
-    except IngestCancelled:
-        raise
-    except Exception:
-        logging.exception("[INGEST] PDFium primary loader failed for %s", filename)
-        docs = []
-
-    # Fallback to PyPDFLoader if PDFium failed or extracted very little text
-    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
-        logging.warning("[INGEST] Trying PyPDFLoader fallback for %s", filename)
+def get_pdf_page_count(pdf_path: str) -> int:
+    if PDFIUM_AVAILABLE:
         try:
-            loader = PyPDFLoader(pdf_path)
-            docs = loader.load()
-            if MAX_PDF_PAGES > 0 and len(docs) > MAX_PDF_PAGES:
-                logging.warning(
-                    "[INGEST] Truncating %s to first %d pages (had %d)",
-                    filename,
-                    MAX_PDF_PAGES,
-                    len(docs),
-                )
-                docs = docs[:MAX_PDF_PAGES]
-            for d in docs:
-                if not isinstance(d.metadata, dict):
-                    d.metadata = {}
-                d.metadata.setdefault("source", pdf_path)
-                d.metadata.setdefault("filename", filename)
-                page_label = rc.display_page(d.metadata.get("page"), d.metadata)
-                if page_label is not None:
-                    d.metadata["page_label"] = page_label
-                    d.metadata.setdefault("page_key", f"{_safe_key(filename)}__p{page_label}")
-                    try:
-                        target_fulltext_dir = fulltext_dir or FULLTEXT_DIR
-                        os.makedirs(target_fulltext_dir, exist_ok=True)
-                        page_key = _safe_fulltext_key(d.metadata["page_key"])
-                        d.metadata["page_key"] = page_key
-                        with open(os.path.join(target_fulltext_dir, f"{page_key}.txt"), "w", encoding="utf-8") as f:
-                            f.write(d.page_content or "")
-                    except Exception:
-                        logging.exception("[INGEST] Failed writing page text for %s page %s", filename, page_label)
-            total_chars = sum(len(d.page_content or "") for d in docs)
-            logging.info("[INGEST] PyPDFLoader fallback extracted ~%d chars from %s", total_chars, filename)
+            pdf = pdfium.PdfDocument(pdf_path)
+            cnt = len(pdf)
+            pdf.close()
+            return cnt
+        except Exception:
+            logging.exception("Failed getting page count via PDFium for %s", pdf_path)
+    try:
+        import pypdf
+        with open(pdf_path, 'rb') as f:
+            reader = pypdf.PdfReader(f)
+            return len(reader.pages)
+    except Exception:
+        logging.exception("Failed getting page count via pypdf for %s", pdf_path)
+    return 1
+
+def pdfium_pdf_range(
+    pdf_path: str,
+    start_page_idx: int,
+    end_page_idx: int,
+    cancel_event: Optional[threading.Event] = None
+) -> List[Document]:
+    if not PDFIUM_AVAILABLE:
+        logging.warning("[PDFium] Not available.")
+        return []
+
+    with _PDFIUM_LOCK:
+        docs: List[Document] = []
+        try:
+            filename = os.path.basename(pdf_path)
+            logging.info("[PDFium] Extracting text from %s pages %d-%d", filename, start_page_idx + 1, end_page_idx)
+            pdf = pdfium.PdfDocument(pdf_path)
+            try:
+                limit = min(end_page_idx, len(pdf))
+                for i in range(start_page_idx, limit):
+                    _raise_if_cancelled(cancel_event)
+                    page = pdf[i]
+                    textpage = page.get_textpage()
+                    text = (textpage.get_text_range() or "").strip()
+                    if not text:
+                        continue
+                    docs.append(
+                        Document(
+                            page_content=text,
+                            metadata={
+                                "source": pdf_path,
+                                "filename": filename,
+                                "page": i,
+                                "page_label": i + 1,
+                                "page_key": f"{_safe_key(filename)}__p{i + 1}",
+                                "pdfium": True,
+                            },
+                        )
+                    )
+            finally:
+                try:
+                    pdf.close()
+                except Exception:
+                    pass
+            logging.info("[PDFium] Extracted text from %d page(s) in %s (range %d-%d)", len(docs), filename, start_page_idx + 1, end_page_idx)
         except IngestCancelled:
             raise
         except Exception:
-            logging.exception("[INGEST] PyPDFLoader fallback failed for %s", filename)
-            docs = []
+            logging.exception("[PDFium] Failed extraction on %s (range %d-%d)", pdf_path, start_page_idx + 1, end_page_idx)
+        return docs
 
-    # Fallback to OCR if both PDFium and PyPDFLoader returned very little text
-    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
-        logging.warning("[INGEST] Very little text from %s, trying OCR fallback...", filename)
-        ocr_docs = ocr_pdf(pdf_path, progress_cb=progress_cb, cancel_event=cancel_event)
-        if ocr_docs:
-            docs = ocr_docs
-
-    if not docs:
-        logging.error("[INGEST] No usable text from %s, skipping.", filename)
+def pypdf_pdf_range(
+    pdf_path: str,
+    start_page_idx: int,
+    end_page_idx: int,
+    cancel_event: Optional[threading.Event] = None
+) -> List[Document]:
+    try:
+        filename = os.path.basename(pdf_path)
+        logging.info("[PyPDF] Fallback extracting text from %s pages %d-%d", filename, start_page_idx + 1, end_page_idx)
+        loader = PyPDFLoader(pdf_path)
+        all_docs = loader.load()
+        docs: List[Document] = []
+        for idx, d in enumerate(all_docs):
+            _raise_if_cancelled(cancel_event)
+            p = d.metadata.get("page", idx)
+            if start_page_idx <= p < end_page_idx:
+                docs.append(d)
+        return docs
+    except IngestCancelled:
+        raise
+    except Exception:
+        logging.exception("[PyPDF] Failed extraction on %s (range %d-%d)", pdf_path, start_page_idx + 1, end_page_idx)
         return []
 
+def _write_range_fulltext(
+    docs: List[Document],
+    pdf_path: str,
+    filename: str,
+    fulltext_dir: Optional[str],
+    cancel_event: Optional[threading.Event] = None
+):
     target_fulltext_dir = fulltext_dir or FULLTEXT_DIR
     os.makedirs(target_fulltext_dir, exist_ok=True)
     for d in docs:
+        _raise_if_cancelled(cancel_event)
         if not isinstance(d.metadata, dict):
             d.metadata = {}
         d.metadata.setdefault("source", pdf_path)
@@ -481,6 +492,59 @@ def process_pdf(
         except Exception:
             logging.exception("[INGEST] Failed writing page text for %s page %s", filename, page_label)
 
+def process_pdf_range(
+    pdf_path: str,
+    start_page_idx: int,
+    end_page_idx: int,
+    cancel_event: Optional[threading.Event] = None,
+    fulltext_dir: Optional[str] = None,
+) -> List[Document]:
+    filename = os.path.basename(pdf_path)
+    logging.info("[INGEST] Processing PDF range: %s (pages %d-%d)", filename, start_page_idx + 1, end_page_idx)
+
+    _raise_if_cancelled(cancel_event)
+    docs = []
+    
+    # 1. PDFium primary range extraction
+    try:
+        docs = pdfium_pdf_range(pdf_path, start_page_idx, end_page_idx, cancel_event=cancel_event)
+        _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+    except IngestCancelled:
+        raise
+    except Exception:
+        logging.exception("[INGEST] PDFium range loader failed for %s", filename)
+        docs = []
+
+    # 2. PyPDF fallback range extraction
+    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
+        logging.warning("[INGEST] Trying PyPDFLoader fallback for %s (range %d-%d)", filename, start_page_idx + 1, end_page_idx)
+        try:
+            docs = pypdf_pdf_range(pdf_path, start_page_idx, end_page_idx, cancel_event=cancel_event)
+            _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+        except IngestCancelled:
+            raise
+        except Exception:
+            logging.exception("[INGEST] PyPDFLoader range fallback failed for %s", filename)
+            docs = []
+
+    # 3. OCR fallback range extraction
+    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
+        logging.warning("[INGEST] Very little text from %s, trying OCR fallback (range %d-%d)...", filename, start_page_idx + 1, end_page_idx)
+        # ocr_pdf takes 1-based page index. So first_page is start_page_idx + 1, last_page is end_page_idx
+        try:
+            ocr_docs = ocr_pdf(pdf_path, first_page=start_page_idx + 1, last_page=end_page_idx, cancel_event=cancel_event)
+            if ocr_docs:
+                docs = ocr_docs
+                _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+        except IngestCancelled:
+            raise
+        except Exception:
+            logging.exception("[INGEST] OCR range fallback failed for %s", filename)
+
+    if not docs:
+        logging.error("[INGEST] No usable text from %s (range %d-%d), skipping.", filename, start_page_idx + 1, end_page_idx)
+        return []
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
@@ -490,7 +554,7 @@ def process_pdf(
     try:
         _raise_if_cancelled(cancel_event)
         chunks = splitter.split_documents(docs)
-        logging.info("[INGEST] → %d chunks from %s", len(chunks), filename)
+        logging.info("[INGEST] → %d chunks from %s (range %d-%d)", len(chunks), filename, start_page_idx + 1, end_page_idx)
         for c in chunks:
             if not isinstance(c.metadata, dict):
                 c.metadata = {}
@@ -499,7 +563,89 @@ def process_pdf(
     except IngestCancelled:
         raise
     except Exception:
-        logging.exception("[INGEST] Failed splitting documents for %s", filename)
+        logging.exception("[INGEST] Failed splitting documents for %s (range %d-%d)", filename, start_page_idx + 1, end_page_idx)
+        return []
+
+    return chunks
+
+# =========================================================
+# PDF → CHUNKS
+# =========================================================
+def process_pdf(
+    pdf_path: str,
+    progress_cb: Optional[Callable[[int, str], None]] = None,
+    cancel_event: Optional[threading.Event] = None,
+    fulltext_dir: Optional[str] = None,
+    start_page_idx: int = 0,
+    end_page_idx: Optional[int] = None,
+) -> List[Document]:
+    filename = os.path.basename(pdf_path)
+    total_pages = get_pdf_page_count(pdf_path)
+    actual_end_page = end_page_idx if end_page_idx is not None else total_pages
+    
+    logging.info("[INGEST] Processing PDF: %s (range %d-%d)", filename, start_page_idx + 1, actual_end_page)
+
+    _raise_if_cancelled(cancel_event)
+    docs = []
+    
+    # 1. PDFium primary range extraction
+    try:
+        docs = pdfium_pdf_range(pdf_path, start_page_idx, actual_end_page, cancel_event=cancel_event)
+        _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+    except IngestCancelled:
+        raise
+    except Exception:
+        logging.exception("[INGEST] PDFium range loader failed for %s", filename)
+        docs = []
+
+    # 2. PyPDF fallback range extraction
+    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
+        logging.warning("[INGEST] Trying PyPDFLoader fallback for %s (range %d-%d)", filename, start_page_idx + 1, actual_end_page)
+        try:
+            docs = pypdf_pdf_range(pdf_path, start_page_idx, actual_end_page, cancel_event=cancel_event)
+            _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+        except IngestCancelled:
+            raise
+        except Exception:
+            logging.exception("[INGEST] PyPDFLoader range fallback failed for %s", filename)
+            docs = []
+
+    # 3. OCR fallback range extraction
+    if not docs or sum(len(d.page_content or "") for d in docs) < 400:
+        logging.warning("[INGEST] Very little text from %s, trying OCR fallback (range %d-%d)...", filename, start_page_idx + 1, actual_end_page)
+        try:
+            ocr_docs = ocr_pdf(pdf_path, first_page=start_page_idx + 1, last_page=actual_end_page, cancel_event=cancel_event)
+            if ocr_docs:
+                docs = ocr_docs
+                _write_range_fulltext(docs, pdf_path, filename, fulltext_dir, cancel_event)
+        except IngestCancelled:
+            raise
+        except Exception:
+            logging.exception("[INGEST] OCR range fallback failed for %s", filename)
+
+    if not docs:
+        logging.error("[INGEST] No usable text from %s (range %d-%d), skipping.", filename, start_page_idx + 1, actual_end_page)
+        return []
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ".", " ", ""],
+    )
+
+    try:
+        _raise_if_cancelled(cancel_event)
+        chunks = splitter.split_documents(docs)
+        logging.info("[INGEST] → %d chunks from %s (range %d-%d)", len(chunks), filename, start_page_idx + 1, actual_end_page)
+        for c in chunks:
+            if not isinstance(c.metadata, dict):
+                c.metadata = {}
+            c.metadata.setdefault("filename", filename)
+            c.metadata.setdefault("source", pdf_path)
+    except IngestCancelled:
+        raise
+    except Exception:
+        logging.exception("[INGEST] Failed splitting documents for %s (range %d-%d)", filename, start_page_idx + 1, actual_end_page)
         return []
 
     return chunks
@@ -573,7 +719,7 @@ def _embed_documents_parallel(
 ) -> FAISS:
     batches: List[Tuple[int, List[Document]]] = []
     cursor = 0
-    for batch in _batch_iterable(docs, EMBED_BATCH_SIZE):
+    for batch in _batch_iterable(docs, EMBEDDING_BATCH_SIZE):
         batches.append((cursor, batch))
         cursor += len(batch)
 
@@ -582,6 +728,9 @@ def _embed_documents_parallel(
     metadatas: List[Optional[Dict[str, Any]]] = [None] * len(docs)
     ids: List[Optional[str]] = [None] * len(docs)
     total_batches = max(1, len(batches))
+    total_chunks = len(docs)
+    embedded_chunks = 0
+    embedded_chunks_lock = threading.Lock()
 
     def _embed_batch(start: int, batch_docs: List[Document]):
         _raise_if_cancelled(cancel_event)
@@ -594,7 +743,7 @@ def _embed_documents_parallel(
         ]
         return start, batch_texts, batch_vectors, batch_metadatas, batch_ids
 
-    max_workers = min(EMBED_INDEX_WORKERS, total_batches)
+    max_workers = min(MAX_EMBEDDING_CONCURRENCY, total_batches)
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         future_map = {ex.submit(_embed_batch, start, batch): start for start, batch in batches}
         for done, fut in enumerate(as_completed(future_map), start=1):
@@ -606,11 +755,15 @@ def _embed_documents_parallel(
                 vectors[pos] = batch_vectors[offset]
                 metadatas[pos] = batch_metadatas[offset]
                 ids[pos] = batch_ids[offset]
-            if progress_cb:
-                progress_cb(
-                    70 + int(20 * done / total_batches),
-                    f"Embedding chunks batch {done}/{total_batches}...",
-                )
+            
+            with embedded_chunks_lock:
+                embedded_chunks += len(batch_texts)
+                if progress_cb:
+                    pct = 50 + int(40 * embedded_chunks / total_chunks)
+                    progress_cb(
+                        pct,
+                        f"Embedding: {embedded_chunks} / {total_chunks} chunks",
+                    )
 
     embedded_pairs = [
         (text or " ", vector)
@@ -635,7 +788,7 @@ def create_vector_store(
     pdf_paths: List[str],
     progress_cb: Optional[Callable[[int, str], None]] = None,
     cancel_event: Optional[threading.Event] = None,
-) -> bool:
+) -> IngestResult:
     started = time.perf_counter()
     staging_root: Optional[str] = None
     INGEST_ACTIVE_JOBS.inc()
@@ -643,12 +796,26 @@ def create_vector_store(
         if not pdf_paths:
             logging.warning("[INGEST] No PDF paths given.")
             INGEST_JOBS_TOTAL.labels("empty").inc()
-            return False
+            return IngestResult(
+                success=False,
+                processed_pages=0,
+                total_pages=0,
+                processed_chunks=0,
+                embedded_chunks=0,
+                failed_batches=["No PDF paths provided."]
+            )
         missing_paths = [p for p in pdf_paths if not p or not os.path.isfile(p)]
         if missing_paths:
             logging.error("[INGEST] Missing PDF path(s): %s", missing_paths)
             INGEST_JOBS_TOTAL.labels("missing_file").inc()
-            return False
+            return IngestResult(
+                success=False,
+                processed_pages=0,
+                total_pages=0,
+                processed_chunks=0,
+                embedded_chunks=0,
+                failed_batches=[f"Missing file: {p}" for p in missing_paths]
+            )
         INGEST_PDFS_TOTAL.inc(len(pdf_paths))
 
         if progress_cb:
@@ -669,27 +836,108 @@ def create_vector_store(
 
         logging.info("[INGEST] Loading embeddings: %s", EMBED_MODEL)
         embeddings = rc.Resources.embeddings()
-        indexed_chunks = 0
 
-        extracted = _extract_pdfs_parallel(
-            pdf_paths,
-            staged_fulltext_dir,
-            progress_cb,
-            cancel_event,
-        )
+        # Build global batch schedule across all PDFs
+        all_batches = []
+        total_pages = 0
+        
+        pdf_page_counts = {}
+        for path in pdf_paths:
+            cnt = get_pdf_page_count(path)
+            pdf_page_counts[path] = cnt
+            total_pages += cnt
+            
+            # Slice into batches
+            num_batches = (cnt + PAGE_BATCH_SIZE - 1) // PAGE_BATCH_SIZE
+            for b_idx in range(num_batches):
+                start_page = b_idx * PAGE_BATCH_SIZE
+                end_page = min(start_page + PAGE_BATCH_SIZE, cnt)
+                all_batches.append({
+                    "pdf_path": path,
+                    "filename": os.path.basename(path),
+                    "start_page_idx": start_page,
+                    "end_page_idx": end_page,
+                    "batch_idx": b_idx,
+                })
 
+        if total_pages == 0:
+            logging.error("[INGEST] Total pages across all PDFs is 0.")
+            INGEST_JOBS_TOTAL.labels("no_pages").inc()
+            return IngestResult(
+                success=False,
+                processed_pages=0,
+                total_pages=0,
+                processed_chunks=0,
+                embedded_chunks=0,
+                failed_batches=["All PDFs had 0 pages or could not be read."]
+            )
+
+        processed_pages = 0
         all_chunks: List[Document] = []
-        for _, chunks in extracted:
-            if chunks:
-                all_chunks.extend(chunks)
+        failed_batches: List[str] = []
+        
+        processed_lock = threading.Lock()
+        chunks_lock = threading.Lock()
+        failed_lock = threading.Lock()
+        
+        def _process_batch_task(batch_info):
+            _raise_if_cancelled(cancel_event)
+            pdf_path = batch_info["pdf_path"]
+            filename = batch_info["filename"]
+            start_page = batch_info["start_page_idx"]
+            end_page = batch_info["end_page_idx"]
+            b_idx = batch_info["batch_idx"]
+            
+            try:
+                batch_chunks = process_pdf(
+                    pdf_path=pdf_path,
+                    cancel_event=cancel_event,
+                    fulltext_dir=staged_fulltext_dir,
+                    start_page_idx=start_page,
+                    end_page_idx=end_page,
+                )
+                
+                with chunks_lock:
+                    all_chunks.extend(batch_chunks)
+            except IngestCancelled:
+                raise
+            except Exception as e:
+                logging.exception("[INGEST] Batch failed: %s (pages %d-%d)", filename, start_page+1, end_page)
+                with failed_lock:
+                    failed_batches.append(f"{filename} batch {b_idx+1} (pages {start_page+1}-{end_page}): {str(e)}")
+            finally:
+                with processed_lock:
+                    nonlocal processed_pages
+                    processed_pages += (end_page - start_page)
+                    if progress_cb:
+                        pct = 10 + int(40 * processed_pages / total_pages)
+                        progress_cb(
+                            pct,
+                            f"OCR / Text Extraction: {processed_pages} / {total_pages} pages",
+                        )
+
+        # Stage 1: Bounded concurrent OCR / Native Text Extraction
+        max_batch_workers = min(MAX_CONCURRENT_BATCHES, len(all_batches))
+        with ThreadPoolExecutor(max_workers=max_batch_workers) as ex:
+            futures = [ex.submit(_process_batch_task, b) for b in all_batches]
+            for fut in as_completed(futures):
+                _raise_if_cancelled(cancel_event)
+                fut.result()
 
         if not all_chunks:
             logging.error("[INGEST] No chunks produced from any PDF.")
             INGEST_JOBS_TOTAL.labels("no_chunks").inc()
-            return False
+            return IngestResult(
+                success=False,
+                processed_pages=processed_pages,
+                total_pages=total_pages,
+                processed_chunks=0,
+                embedded_chunks=0,
+                failed_batches=failed_batches + ["No chunks produced from any PDF."]
+            )
 
         if progress_cb:
-            progress_cb(30, "Preparing chunks for embedding...")
+            progress_cb(50, "Preparing chunks for embedding...")
 
         def _prepare_doc(c: Document, seq: int):
             _raise_if_cancelled(cancel_event)
@@ -717,30 +965,27 @@ def create_vector_store(
             idx_meta.setdefault("filename", filename)
             return seq, Document(page_content=snippet if snippet else " ", metadata=idx_meta)
 
-        docs_for_index: List[Optional[Document]] = [None] * len(all_chunks)
-        with ThreadPoolExecutor(max_workers=min(INGEST_MAX_WORKERS, max(1, len(all_chunks)))) as ex:
-            futures = [ex.submit(_prepare_doc, chunk, idx) for idx, chunk in enumerate(all_chunks)]
-            for idx, fut in enumerate(as_completed(futures), start=1):
-                _raise_if_cancelled(cancel_event)
-                try:
-                    seq, prepared = fut.result()
-                    docs_for_index[seq] = prepared
-                except IngestCancelled:
-                    raise
-                except Exception:
-                    logging.exception("[INGEST] Failed while preparing chunk %d", idx)
-                if progress_cb and idx % max(1, len(futures) // 20 or 1) == 0:
-                    progress_cb(30 + int(35 * idx / max(1, len(futures))), f"Preparing chunks {idx}/{len(futures)}...")
+        docs_for_index = []
+        for idx, chunk in enumerate(all_chunks):
+            _raise_if_cancelled(cancel_event)
+            _, prepared = _prepare_doc(chunk, idx)
+            docs_for_index.append(prepared)
 
-        docs_for_index = [doc for doc in docs_for_index if doc is not None]
         indexed_chunks = len(docs_for_index)
         if indexed_chunks == 0:
-            logging.error("[INGEST] No chunks produced from any PDF.")
+            logging.error("[INGEST] No chunks produced after preparation.")
             INGEST_JOBS_TOTAL.labels("no_chunks").inc()
-            return False
+            return IngestResult(
+                success=False,
+                processed_pages=processed_pages,
+                total_pages=total_pages,
+                processed_chunks=0,
+                embedded_chunks=0,
+                failed_batches=failed_batches + ["No chunks produced after preparation."]
+            )
 
         if progress_cb:
-            progress_cb(65, f"Embedding {indexed_chunks} chunks in parallel...")
+            progress_cb(50, f"Embedding {indexed_chunks} chunks in parallel...")
 
         try:
             faiss_store = _embed_documents_parallel(
@@ -752,7 +997,14 @@ def create_vector_store(
         except Exception:
             logging.exception("[INGEST] Failed while parallel indexing")
             INGEST_JOBS_TOTAL.labels("index_error").inc()
-            return False
+            return IngestResult(
+                success=False,
+                processed_pages=processed_pages,
+                total_pages=total_pages,
+                processed_chunks=len(all_chunks),
+                embedded_chunks=0,
+                failed_batches=failed_batches + ["Failed during embedding generation."]
+            )
 
         if progress_cb:
             progress_cb(90, "Waiting for index commit lock...")
@@ -771,19 +1023,40 @@ def create_vector_store(
             except Exception:
                 logging.exception("[INGEST] Failed saving FAISS store")
                 INGEST_JOBS_TOTAL.labels("save_error").inc()
-                return False
+                return IngestResult(
+                    success=False,
+                    processed_pages=processed_pages,
+                    total_pages=total_pages,
+                    processed_chunks=len(all_chunks),
+                    embedded_chunks=indexed_chunks,
+                    failed_batches=failed_batches + ["Failed saving FAISS store."]
+                )
 
             try:
                 files = os.listdir(staged_db_path)
                 if not files:
                     logging.error("[INGEST] FAISS directory empty at %s", staged_db_path)
                     INGEST_JOBS_TOTAL.labels("empty_index").inc()
-                    return False
+                    return IngestResult(
+                        success=False,
+                        processed_pages=processed_pages,
+                        total_pages=total_pages,
+                        processed_chunks=len(all_chunks),
+                        embedded_chunks=indexed_chunks,
+                        failed_batches=failed_batches + ["FAISS directory was empty after save."]
+                    )
                 logging.info("[INGEST] FAISS saved. Sample files: %s", files[:10])
             except Exception:
                 logging.exception("[INGEST] Could not list FAISS directory")
                 INGEST_JOBS_TOTAL.labels("list_error").inc()
-                return False
+                return IngestResult(
+                    success=False,
+                    processed_pages=processed_pages,
+                    total_pages=total_pages,
+                    processed_chunks=len(all_chunks),
+                    embedded_chunks=indexed_chunks,
+                    failed_batches=failed_batches + ["Could not list FAISS directory."]
+                )
 
             # Manifest
             try:
@@ -792,9 +1065,9 @@ def create_vector_store(
                     "chunks": indexed_chunks,
                     "pdf_count": len(pdf_paths),
                     "embed_model": EMBED_MODEL,
-                    "embed_batch_size": EMBED_BATCH_SIZE,
-                    "embed_index_workers": EMBED_INDEX_WORKERS,
-                    "ingest_workers": INGEST_MAX_WORKERS,
+                    "embed_batch_size": EMBEDDING_BATCH_SIZE,
+                    "embed_index_workers": MAX_EMBEDDING_CONCURRENCY,
+                    "ingest_workers": MAX_CONCURRENT_BATCHES,
                     "fulltext_dir": _portable_path(FULLTEXT_DIR),
                     "index_type": "flat",
                     "created_at": int(time.time()),
@@ -827,7 +1100,14 @@ def create_vector_store(
             except Exception:
                 logging.exception("[INGEST] Failed writing manifest")
                 INGEST_JOBS_TOTAL.labels("manifest_error").inc()
-                return False
+                return IngestResult(
+                    success=False,
+                    processed_pages=processed_pages,
+                    total_pages=total_pages,
+                    processed_chunks=len(all_chunks),
+                    embedded_chunks=indexed_chunks,
+                    failed_batches=failed_batches + ["Failed writing manifest."]
+                )
 
             if progress_cb:
                 progress_cb(95, "FAISS saved. Finalizing...")
@@ -836,16 +1116,38 @@ def create_vector_store(
             INGEST_JOBS_TOTAL.labels("success").inc()
             INGEST_LAST_SUCCESS.set_to_current_time()
             logging.info("[INGEST] Ingestion finished successfully.")
-            return True
+            return IngestResult(
+                success=(len(failed_batches) == 0),
+                processed_pages=processed_pages,
+                total_pages=total_pages,
+                processed_chunks=len(all_chunks),
+                embedded_chunks=indexed_chunks,
+                failed_batches=failed_batches
+            )
 
     except IngestCancelled:
         logging.info("[INGEST] Ingestion canceled.")
         INGEST_JOBS_TOTAL.labels("canceled").inc()
-        return False
-    except Exception:
+        return IngestResult(
+            success=False,
+            processed_pages=processed_pages if 'processed_pages' in locals() else 0,
+            total_pages=total_pages if 'total_pages' in locals() else 0,
+            processed_chunks=len(all_chunks) if 'all_chunks' in locals() else 0,
+            embedded_chunks=indexed_chunks if 'indexed_chunks' in locals() else 0,
+            failed_batches=failed_batches if 'failed_batches' in locals() else [],
+            canceled=True
+        )
+    except Exception as e:
         logging.exception("[INGEST] Unexpected failure in create_vector_store")
         INGEST_JOBS_TOTAL.labels("error").inc()
-        return False
+        return IngestResult(
+            success=False,
+            processed_pages=processed_pages if 'processed_pages' in locals() else 0,
+            total_pages=total_pages if 'total_pages' in locals() else 0,
+            processed_chunks=len(all_chunks) if 'all_chunks' in locals() else 0,
+            embedded_chunks=indexed_chunks if 'indexed_chunks' in locals() else 0,
+            failed_batches=(failed_batches if 'failed_batches' in locals() else []) + [str(e)]
+        )
     finally:
         if staging_root:
             _remove_tree(staging_root)
