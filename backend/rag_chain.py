@@ -145,7 +145,9 @@ class Resources:
     _rotator = None
     _cross_encoder = None
     _vs_signature = None
-    _lock = threading.Lock()
+    # Reentrant: _load_vectorstore() runs under this lock and calls embeddings(),
+    # which acquires it again on the same thread.
+    _lock = threading.RLock()
 
     @classmethod
     def embeddings(cls):
