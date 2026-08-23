@@ -177,7 +177,11 @@ def _start_ingest_job(job_id: str, pdf_paths: List[str]):
         cancel_event = UPLOAD_CANCEL_EVENTS.get(job_id)
 
         def cb(p, d):
-            _set_job(job_id, progress=p, detail=d)
+            # Progress reporting is best effort; never let it abort the ingest.
+            try:
+                _set_job(job_id, progress=p, detail=d)
+            except Exception:
+                logging.exception("[UPLOAD] Failed to record progress for job %s", job_id)
 
         try:
             res = create_vector_store(pdf_paths, progress_cb=cb, cancel_event=cancel_event)
