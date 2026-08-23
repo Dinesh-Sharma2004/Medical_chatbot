@@ -38,6 +38,9 @@ pip-wheel-metadata/
 .vscode/
 *.code-workspace
 
+# Machine-local Claude Code settings (dev tooling in .claude/ is tracked)
+.claude/settings.local.json
+
 node_modules/
 npm-debug.log*
 yarn-debug.log*

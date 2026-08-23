@@ -122,5 +122,140 @@ class IngestIntegrityTests(unittest.TestCase):
             self.assertEqual(f.read(), "old-text")
 
 
+class IngestBatchingTests(unittest.TestCase):
+    def setUp(self):
+        scratch_root = os.path.join(os.getcwd(), "backend", "data")
+        os.makedirs(scratch_root, exist_ok=True)
+        self.tmp = os.path.join(scratch_root, f"ingest-batching-{uuid.uuid4().hex}")
+        os.makedirs(self.tmp, exist_ok=True)
+        self.pdf = os.path.join(self.tmp, "sample.pdf")
+        with open(self.pdf, "wb") as f:
+            f.write(b"%PDF-1.4 test")
+
+        self.patches = [
+            patch.object(ingest, "DB_FAISS_BASE", self.tmp),
+            patch.object(ingest, "DB_FAISS_PATH", os.path.join(self.tmp, "db_faiss")),
+            patch.object(ingest, "FULLTEXT_DIR", os.path.join(self.tmp, "fulltext")),
+            patch.object(ingest, "MANIFEST_PATH", os.path.join(self.tmp, "manifest.json")),
+            patch.object(ingest, "INGEST_LOCK_PATH", os.path.join(self.tmp, ".ingest.lock")),
+            patch.object(ingest.rc.Resources, "embeddings", return_value=MockEmbeddings()),
+            patch.object(ingest.rc, "warmup_resources", return_value=None),
+        ]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in reversed(self.patches):
+            p.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_pdf_page_count_fallback(self):
+        cnt = ingest.get_pdf_page_count(self.pdf)
+        self.assertEqual(cnt, 1)
+
+    def test_batch_splitting_calculation(self):
+        with patch.object(ingest, "get_pdf_page_count", return_value=100):
+            with patch.object(ingest, "process_pdf", return_value=[]) as mock_process:
+                with patch.object(ingest, "FAISS", FakeFAISSStore):
+                    ingest.create_vector_store([self.pdf])
+                
+                self.assertEqual(mock_process.call_count, 7)
+                first_call_args = mock_process.call_args_list[0][1]
+                self.assertEqual(first_call_args["start_page_idx"], 0)
+                self.assertEqual(first_call_args["end_page_idx"], 15)
+                
+                last_call_args = mock_process.call_args_list[-1][1]
+                self.assertEqual(last_call_args["start_page_idx"], 90)
+                self.assertEqual(last_call_args["end_page_idx"], 100)
+
+    def test_multiple_pdfs_global_concurrency(self):
+        pdf_a = os.path.join(self.tmp, "pdf_a.pdf")
+        pdf_b = os.path.join(self.tmp, "pdf_b.pdf")
+        with open(pdf_a, "wb") as f:
+            f.write(b"%PDF-1.4 test a")
+        with open(pdf_b, "wb") as f:
+            f.write(b"%PDF-1.4 test b")
+
+        def mock_page_count(path):
+            if "pdf_a" in path:
+                return 32
+            return 20
+
+        def mock_process_pdf(pdf_path, **kwargs):
+            start = kwargs.get("start_page_idx", 0)
+            end = kwargs.get("end_page_idx", start + 1)
+            filename = os.path.basename(pdf_path)
+            return [
+                Document(
+                    page_content=f"Text on page {p}",
+                    metadata={
+                        "source": pdf_path,
+                        "filename": filename,
+                        "page": p,
+                        "page_label": p + 1,
+                        "page_key": f"{filename}__p{p+1}",
+                    }
+                )
+                for p in range(start, end)
+            ]
+
+        with patch.object(ingest, "get_pdf_page_count", side_effect=mock_page_count):
+            with patch.object(ingest, "process_pdf", side_effect=mock_process_pdf) as mock_proc:
+                with patch.object(ingest, "FAISS", FakeFAISSStore):
+                    res = ingest.create_vector_store([pdf_a, pdf_b])
+                    
+                    self.assertTrue(res["success"])
+                    self.assertEqual(res["processed_pages"], 52)
+                    self.assertEqual(res["total_pages"], 52)
+                    self.assertEqual(res["processed_chunks"], 52)
+                    self.assertEqual(mock_proc.call_count, 5)
+
+    def test_single_batch_failure_reporting(self):
+        pdf_a = os.path.join(self.tmp, "pdf_a.pdf")
+        with open(pdf_a, "wb") as f:
+            f.write(b"%PDF-1.4 test a")
+
+        def mock_process_pdf(pdf_path, **kwargs):
+            start = kwargs.get("start_page_idx", 0)
+            if start == 15:
+                raise RuntimeError("OCR device failure")
+            return [
+                Document(
+                    page_content="OK",
+                    metadata={"page": start}
+                )
+            ]
+
+        with patch.object(ingest, "get_pdf_page_count", return_value=30):
+            with patch.object(ingest, "process_pdf", side_effect=mock_process_pdf):
+                with patch.object(ingest, "FAISS", FakeFAISSStore):
+                    res = ingest.create_vector_store([pdf_a])
+                    
+                    self.assertFalse(res["success"])
+                    self.assertEqual(len(res["failed_batches"]), 1)
+                    self.assertIn("OCR device failure", res["failed_batches"][0])
+                    self.assertEqual(res["processed_chunks"], 1)
+
+    def test_cancellation(self):
+        import threading
+        pdf_a = os.path.join(self.tmp, "pdf_a.pdf")
+        with open(pdf_a, "wb") as f:
+            f.write(b"%PDF-1.4 test a")
+
+        cancel_event = threading.Event()
+        
+        def mock_process_pdf(pdf_path, **kwargs):
+            cancel_event.set()
+            return [Document(page_content="OK")]
+
+        with patch.object(ingest, "get_pdf_page_count", return_value=30):
+            with patch.object(ingest, "process_pdf", side_effect=mock_process_pdf):
+                with patch.object(ingest, "FAISS", FakeFAISSStore):
+                    res = ingest.create_vector_store([pdf_a], cancel_event=cancel_event)
+                    self.assertFalse(res["success"])
+                    self.assertTrue(res.get("canceled", False))
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -117,6 +117,53 @@ class ApiSmokeTests(unittest.TestCase):
         self.assertIn('"text": " hello"', body)
         self.assertIn('"type": "done"', body)
 
+    @patch("backend.main.rc.generate_with_groq")
+    @patch("backend.main.rc.stream_groq")
+    @patch("backend.main.rc.build_generation_bundle")
+    @patch("backend.main.rc.build_retrieval_bundle")
+    @patch("backend.main.rc.status")
+    def test_streaming_ask_recovers_from_an_empty_provider_stream(
+        self,
+        mock_status,
+        mock_build_retrieval_bundle,
+        mock_build_generation_bundle,
+        mock_stream_groq,
+        mock_generate_with_groq,
+    ):
+        mock_status.return_value = {"vectorstore": True, "llm": True}
+        mock_build_retrieval_bundle.return_value = {"sources": []}
+        mock_build_generation_bundle.return_value = {"prompt": "prompt"}
+        mock_stream_groq.return_value = iter([{"done": True}])
+        mock_generate_with_groq.return_value = ("Recovered answer", None)
+
+        with self.client.stream(
+            "POST",
+            "/api/ask/stream",
+            json={"question": "What is it?", "mode": "basic"},
+        ) as response:
+            body = response.read().decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"text": "Recovered answer"', body)
+        self.assertIn('"type": "done"', body)
+
+    @patch("backend.main.rc.answer_query")
+    @patch("backend.main.rc.get_rag_chain")
+    def test_ask_replaces_blank_provider_answer(self, mock_get_rag_chain, mock_answer_query):
+        mock_get_rag_chain.return_value = True
+        mock_answer_query.return_value = {"answer": None, "error": "provider returned no content", "sources": []}
+
+        response = self.client.post(
+            "/api/ask",
+            data={"question": "What is it?", "mode": "basic"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["answer"],
+            "I couldn't generate an answer right now. Please try again.",
+        )
+
     def test_upload_rejects_non_pdf(self):
         response = self.client.post(
             "/api/upload",

@@ -24,10 +24,9 @@ export default function ChatInput({ input, setInput, loading, onSubmit, onCancel
             onClick={onSubmit}
             disabled={!input.trim() || disabled}
             className="group relative px-8 py-4 rounded-xl font-bold text-white text-lg
-                       bg-gradient-to-r from-cyan-600 to-blue-600
-                       hover:shadow-2xl hover:shadow-cyan-500/30
-                       transform hover:scale-105 active:scale-95
-                       transition-all duration-200 overflow-hidden min-w-[140px]"
+                       bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600
+                       hover:shadow-2xl hover:shadow-cyan-500/30 hover:scale-105 active:scale-98
+                       transition-all duration-300 overflow-hidden min-w-[140px] border border-white/10"
           >
             <span className="relative z-10 flex items-center gap-2">
               <Send className="w-6 h-6" /> Send
@@ -36,9 +35,12 @@ export default function ChatInput({ input, setInput, loading, onSubmit, onCancel
         ) : (
           <button
             onClick={onCancel}
-            className="px-6 py-4 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-500"
+            className="px-8 py-4 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500
+                       text-white font-bold text-lg hover:shadow-2xl hover:shadow-red-500/30
+                       transform hover:scale-105 active:scale-98 transition-all duration-300
+                       flex items-center justify-center gap-2 min-w-[140px]"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6" /> Stop
           </button>
         )}
       </div>

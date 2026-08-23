@@ -19,7 +19,20 @@ def run_ingest_job(job_id: str, pdf_paths: list[str]) -> bool:
 
     try:
         job_store.put_job(job_id, {"status": "processing", "detail": "Worker indexing documents"})
-        ok = create_vector_store(pdf_paths, progress_cb=progress)
+        res = create_vector_store(pdf_paths, progress_cb=progress)
+        stats = {}
+        if isinstance(res, dict):
+            ok = res.get("success", False)
+            stats = {
+                "failed_batches": res.get("failed_batches", []),
+                "processed_pages": res.get("processed_pages", 0),
+                "total_pages": res.get("total_pages", 0),
+                "processed_chunks": res.get("processed_chunks", 0),
+                "embedded_chunks": res.get("embedded_chunks", 0),
+            }
+        else:
+            ok = res
+
         job_store.put_job(
             job_id,
             {
@@ -27,6 +40,7 @@ def run_ingest_job(job_id: str, pdf_paths: list[str]) -> bool:
                 "progress": 100 if ok else 0,
                 "detail": "Ready to chat" if ok else "Ingestion failed",
                 "duration": round(time.time() - started, 2),
+                **stats
             },
         )
         return ok

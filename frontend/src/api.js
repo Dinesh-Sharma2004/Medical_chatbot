@@ -207,11 +207,11 @@ export async function saveChatHistory(token, messages) {
 }
 
 /* ASK STREAM */
-export async function askStream(question, mode = "basic", { signal, token } = {}) {
+export async function askStream(question, mode = "basic", { signal, token, requestId } = {}) {
   const res = await fetch(ENDPOINTS.ASK_STREAM, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ question, mode }),
+    body: JSON.stringify({ question, mode, requestId }),
     signal,
   });
   if (!res.ok) throw new Error(await res.text());

@@ -62,30 +62,12 @@ function AppContent() {
     navigate("/");
   }
 
-  const getNavLinkClass = (path) => {
-    const isActive = location.pathname === path;
-    const base = `group relative px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300`;
-    const active = isActive
-      ? "text-white"
-      : "text-gray-700 dark:text-gray-300 hover:text-cyan-600 dark:hover:text-cyan-400";
-
-    return `${base} ${active}`;
-  };
-
-  const getNavBgClass = (path) => {
-    const isActive = location.pathname === path;
-    const gradient =
-      path === "/" ? "bg-gradient-to-r from-cyan-500 to-blue-600" : "bg-gradient-to-r from-blue-500 to-indigo-600";
-
-    return `absolute inset-0 ${gradient} transition-transform duration-300 ${
-      isActive ? "scale-100" : "scale-0 group-hover:scale-100"
-    }`;
-  };
+  const isActivePath = (path) => location.pathname === path;
 
   return (
     <div className="min-h-screen transition-colors duration-700 bg-gradient-to-br from-white via-blue-50 to-blue-100 dark:from-slate-950 dark:via-blue-950 dark:to-cyan-950">
       <header className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg shadow-lg border-b border-gray-200 dark:border-cyan-500/20 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-[98%] mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 group">
               <div className="relative">
@@ -107,20 +89,32 @@ function AppContent() {
             </div>
 
             <nav className="flex items-center gap-3 flex-wrap justify-end">
-              <Link to="/" className={getNavLinkClass("/")}>
-                <span className={getNavBgClass("/")}></span>
-                <span className="relative flex items-center gap-2">
-                  <Bot className="w-4 h-4" />
-                  Chat
-                </span>
+              {/* Chat nav button */}
+              <Link
+                to="/"
+                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm
+                  transition-all duration-300 border
+                  ${isActivePath("/")
+                    ? "text-white bg-gradient-to-r from-cyan-500 to-blue-600 border-transparent shadow-lg shadow-cyan-500/30 scale-105"
+                    : "text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-slate-800/60 border-gray-200 dark:border-gray-700 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:shadow-lg hover:shadow-cyan-500/20 hover:scale-105 active:scale-98"
+                  }`}
+              >
+                <Bot className="w-4 h-4" />
+                Chat
               </Link>
 
-              <Link to="/upload" className={getNavLinkClass("/upload")}>
-                <span className={getNavBgClass("/upload")}></span>
-                <span className="relative flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Upload
-                </span>
+              {/* Upload nav button */}
+              <Link
+                to="/upload"
+                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm
+                  transition-all duration-300 border
+                  ${isActivePath("/upload")
+                    ? "text-white bg-gradient-to-r from-blue-500 to-indigo-600 border-transparent shadow-lg shadow-blue-500/30 scale-105"
+                    : "text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-slate-800/60 border-gray-200 dark:border-gray-700 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 hover:shadow-lg hover:shadow-blue-500/20 hover:scale-105 active:scale-98"
+                  }`}
+              >
+                <Upload className="w-4 h-4" />
+                Upload
               </Link>
 
               <div className="h-8 w-px bg-gray-300 dark:bg-gray-700 mx-1"></div>
@@ -137,7 +131,10 @@ function AppContent() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 px-2 py-1 font-semibold text-emerald-800 transition hover:bg-emerald-100 dark:border-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-800/50
+                               px-2.5 py-1.5 text-xs font-bold text-red-600 dark:text-red-400
+                               hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-400
+                               hover:scale-105 active:scale-98 transition-all duration-200"
                   >
                     <LogOut className="h-3.5 w-3.5" />
                     Sign out
@@ -151,7 +148,7 @@ function AppContent() {
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 opacity-70"></div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 relative">
+      <main className="max-w-[98%] mx-auto px-4 py-6 relative">
         <div className={!user && authReady ? "pointer-events-none select-none blur-md" : ""}>
           <Routes>
             <Route path="/" element={<ChatPage token={token} user={user} onLogout={handleLogout} />} />
