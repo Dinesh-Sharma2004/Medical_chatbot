@@ -1,8 +1,5 @@
 ---
-title: Medical Chatbot
-emoji: 🩺
-colorFrom: blue
-colorTo: green
+title: Medical Chatbo
 sdk: docker
 app_port: 8000
 short_description: Medical chatbot with PDF upload and Groq RAG.
