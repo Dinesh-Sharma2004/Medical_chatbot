@@ -66,7 +66,7 @@ GROQ_KEYS = [
 ]
 
 # Recommended default model
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 GROQ_ENDPOINT = os.getenv(
     "GROQ_ENDPOINT",
     "https://api.groq.com/openai/v1/chat/completions"
@@ -77,6 +77,10 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 256))
 RETRIEVER_K = int(os.getenv("RETRIEVER_K", os.getenv("RETRIEVER_TOP_K", 8)))
 FETCH_K = int(os.getenv("FETCH_K", os.getenv("RETRIEVER_FETCH_K", 100)))
 REQUEST_RETRY_BACKOFF = float(os.getenv("REQUEST_RETRY_BACKOFF", 1.0))
+STREAM_RETRY_ATTEMPTS = max(1, int(os.getenv("STREAM_RETRY_ATTEMPTS", 3)))
+# Statuses worth another attempt: throttling and the misleading 413 that Groq's
+# agentic gateway returns when it is actually rate limiting a small request.
+RETRYABLE_STATUS_CODES = frozenset({408, 413, 429, 500, 502, 503, 504})
 HYBRID_SEARCH_ENABLED = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() not in {"0", "false", "no"}
 HYBRID_DENSE_WEIGHT = float(os.getenv("HYBRID_DENSE_WEIGHT", 0.62))
 HYBRID_TEXT_WEIGHT = float(os.getenv("HYBRID_TEXT_WEIGHT", 0.30))
@@ -1005,11 +1009,38 @@ def generate_with_groq(prompt: str, retry_on_429: bool = True):
 # =========================================================
 # GROQ STREAMING (SSE)
 # =========================================================
+class _RetryableProviderError(RuntimeError):
+    """Provider-side throttling reported inside an HTTP 200 SSE stream."""
+
+
+_RETRYABLE_ERROR_MARKERS = (
+    "rate limit",
+    "rate_limit",
+    "too many requests",
+    "request entity too large",
+    "over capacity",
+    "overloaded",
+    "service unavailable",
+    "try again",
+)
+
+
+def _is_retryable_provider_message(message: str) -> bool:
+    text = (message or "").lower()
+    return any(marker in text for marker in _RETRYABLE_ERROR_MARKERS)
+
+
 def stream_groq(prompt: str):
     """
     Yields dicts:
       {"text": "..."}  for content deltas
       {"done": True}   when streaming is finished
+
+    Throttled attempts are retried with backoff, including the in-stream error
+    objects that agentic models return over HTTP 200 (Groq's compound gateway
+    reports rate limiting as "Request Entity Too Large"). A retry only happens
+    while nothing has been yielded yet, so it can never duplicate text the
+    caller has already received.
     """
     Resources.init_groq()
     key = Resources.key()
@@ -1026,8 +1057,11 @@ def stream_groq(prompt: str):
         return h
 
     started = time.perf_counter()
+    last_error: Optional[str] = None
     try:
-        for attempt in range(2):
+        for attempt in range(STREAM_RETRY_ATTEMPTS):
+            can_retry = attempt < STREAM_RETRY_ATTEMPTS - 1
+            emitted_text = False
             try:
                 client = _get_shared_client()
                 with client.stream(
@@ -1037,9 +1071,15 @@ def stream_groq(prompt: str):
                     json=payload,
                     timeout=None,
                 ) as resp:
-                    if resp.status_code == 429 and attempt == 0:
+                    if resp.status_code in RETRYABLE_STATUS_CODES and can_retry:
+                        last_error = f"HTTP {resp.status_code} from the model provider."
+                        LLM_REQUESTS_TOTAL.labels("http_error").inc()
+                        logging.warning(
+                            "[GROQ] Retrying stream after HTTP %s (attempt %s/%s)",
+                            resp.status_code, attempt + 1, STREAM_RETRY_ATTEMPTS,
+                        )
                         Resources.rotate_key()
-                        time.sleep(REQUEST_RETRY_BACKOFF)
+                        time.sleep(REQUEST_RETRY_BACKOFF * (attempt + 1))
                         continue
 
                     try:
@@ -1073,21 +1113,43 @@ def stream_groq(prompt: str):
                         if isinstance(chunk_payload, dict) and chunk_payload.get("error"):
                             err = chunk_payload["error"]
                             detail = err.get("message") if isinstance(err, dict) else str(err)
-                            raise RuntimeError(detail or "The model provider returned an error.")
+                            detail = detail or "The model provider returned an error."
+                            if not emitted_text and _is_retryable_provider_message(detail):
+                                raise _RetryableProviderError(detail)
+                            raise RuntimeError(detail)
 
                         try:
                             delta = chunk_payload["choices"][0]["delta"].get("content")
-                            if delta:
-                                yield {"text": delta}
                         except Exception:
                             continue
+                        if delta:
+                            emitted_text = True
+                            yield {"text": delta}
 
                     if not sent_done:
                         yield {"done": True}
                     return
+            except _RetryableProviderError as exc:
+                last_error = str(exc)
+                if not can_retry:
+                    LLM_REQUESTS_TOTAL.labels("request_error").inc()
+                    raise RuntimeError(_network_error_message(exc)) from exc
+                logging.warning(
+                    "[GROQ] Retrying throttled stream (attempt %s/%s): %s",
+                    attempt + 1, STREAM_RETRY_ATTEMPTS, last_error,
+                )
+                Resources.rotate_key()
+                time.sleep(REQUEST_RETRY_BACKOFF * (attempt + 1))
+                continue
             except Exception as exc:
                 LLM_REQUESTS_TOTAL.labels("request_error").inc()
                 raise RuntimeError(_network_error_message(exc)) from exc
+
+        # Every attempt was throttled before any text was produced.
+        LLM_REQUESTS_TOTAL.labels("request_error").inc()
+        raise RuntimeError(
+            last_error or "The model provider is rate limited. Please try again."
+        )
     finally:
         LLM_LATENCY.labels("true").observe(time.perf_counter() - started)
 
