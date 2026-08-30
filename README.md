@@ -1,9 +1,5 @@
 
 
----
-Medical Chatbot: AI-powered medical document intelligence.
----
-
 <div align="center">
 
 #  Medibot
