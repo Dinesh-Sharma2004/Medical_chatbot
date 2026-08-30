@@ -1,14 +1,17 @@
 
-
 <div align="center">
 
-#  Medibot
+# 🩺 Medibot
+
+<img src="./interface.png" alt="Medibot demo" width="850"/>
 
 ### Medical intelligence, grounded in your documents.
 
 **Upload medical PDFs. Ask questions. Get answers grounded in the source material.**
 
 <br/>
+
+</div>
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square\&logo=python\&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat-square\&logo=fastapi\&logoColor=white)](https://fastapi.tiangolo.com/)
