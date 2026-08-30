@@ -1,5 +1,6 @@
 
 
+---
 title: Medical Chatbot
 emoji: 🩺
 colorFrom: blue
@@ -8,6 +9,7 @@ sdk: docker
 app_port: 8000
 short_description: AI-powered medical document intelligence with grounded RAG.
 license: mit
+---
 ------------
 
 <div align="center">
