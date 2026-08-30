@@ -1,8 +1,12 @@
 
 
 ---
-Title: Medical Chatbot
+Title: Medical Chatbot 
+
+
 Short_description: AI-powered medical document intelligence with grounded RAG.
+
+
 License: mit
 ---
 
