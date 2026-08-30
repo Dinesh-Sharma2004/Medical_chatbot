@@ -34,8 +34,8 @@
 
 <p align="center">
   <img src="pitch.gif" width="900" alt="Medical Chatbot Demo">
-  The video is blurred due to compression
-  Check pitch.mp4 for clearer video pitch
+  <p>The video is blurred due to compression</p>
+  <p>Check pitch.mp4 for clearer video pitch</p>
 </p>
 
 <br/>
