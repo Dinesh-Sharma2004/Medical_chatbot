@@ -1,7 +1,7 @@
 
 
 ---
-Medical Chatbot- AI-powered medical document intelligence with grounded RAG.
+Medical Chatbot: AI-powered medical document intelligence with grounded RAG.
 ---
 
 <div align="center">
