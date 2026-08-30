@@ -1,20 +1,14 @@
 
 
 ---
-title: Medical Chatbot
-emoji: 🩺
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 8000
-short_description: AI-powered medical document intelligence with grounded RAG.
-license: mit
+Title: Medical Chatbot
+Short_description: AI-powered medical document intelligence with grounded RAG.
+License: mit
 ---
-------------
 
 <div align="center">
 
-# 🩺 Medibot
+#  Medibot
 
 ### Medical intelligence, grounded in your documents.
 
