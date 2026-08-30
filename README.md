@@ -1,7 +1,7 @@
 
 <div align="center">
 
-# 🩺 Medibot
+# 🩺 Medibot AI
 
 <img src="./interface.png" alt="Medibot demo" width="850"/>
 
