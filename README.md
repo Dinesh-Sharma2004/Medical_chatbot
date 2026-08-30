@@ -1,8 +1,7 @@
 
 
 ---
-###Medical Chatbot- AI-powered medical document intelligence with grounded RAG.
-License: mit
+Medical Chatbot- AI-powered medical document intelligence with grounded RAG.
 ---
 
 <div align="center">
