@@ -1,10 +1,14 @@
 ---
 
 title: Medical Chatbot
+emoji: 🩺
+colorFrom: blue
+colorTo: indigo
 sdk: docker
 app_port: 8000
 short_description: AI-powered medical document intelligence with grounded RAG.
-------------------------------------------------------------------------------
+license: mit
+------------
 
 <div align="center">
 
@@ -14,7 +18,7 @@ short_description: AI-powered medical document intelligence with grounded RAG.
 
 **Upload medical PDFs. Ask questions. Get answers grounded in the source material.**
 
-<br />
+<br/>
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square\&logo=python\&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat-square\&logo=fastapi\&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -25,7 +29,7 @@ short_description: AI-powered medical document intelligence with grounded RAG.
 [![Groq](https://img.shields.io/badge/Groq-000000?style=flat-square)](https://groq.com/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](#-license)
 
-<br />
+<br/>
 
 **FastAPI · React · LangChain · FAISS · FastEmbed · Groq · Redis/RQ · PostgreSQL · Docker · Kubernetes · AWS EKS**
 
@@ -33,132 +37,112 @@ short_description: AI-powered medical document intelligence with grounded RAG.
 
 ---
 
-## 🎬 See It in Action
-
-> **From document upload to grounded medical answers — in one workflow.**
+## 🎬 See Medibot in Action
 
 <div align="center">
 
-### ▶️ [Watch the Medibot Pitch & Demo](pitch.mp4)
+<a href="pitch.mp4">
+
+<img src="pitch_samples.png" alt="Medibot pitch and product demo" width="900"/>
+
+</a>
+
+<br/>
+
+**▶ Click the preview above to watch the pitch & product demo**
 
 </div>
 
-The demo walks through the core experience:
-
-```text
-       📄 Upload
-          │
-          ▼
-   ⚙️ Process Document
-          │
-          ▼
-    🧠 Build Embeddings
-          │
-          ▼
-     🔎 FAISS Search
-          │
-          ▼
-   🤖 Grounded Answer
-          │
-          ▼
-    📚 Source Pages
-```
-
 ---
 
-# 🧠 What is Medibot?
+# 🩺 What is Medibot?
 
 **Medibot** is a full-stack medical document intelligence platform built around **Retrieval-Augmented Generation (RAG)**.
 
-Instead of asking an LLM to answer medical questions purely from its internal knowledge, Medibot allows users to provide their own medical documents and uses those documents as the knowledge source.
+Instead of relying only on an LLM's internal knowledge, Medibot lets users upload their own medical documents and interact with them through a conversational interface.
 
 The system transforms:
 
-**PDF → text → chunks → embeddings → vector index → retrieval → grounded generation**
+```text
+PDF
+ │
+ ▼
+Text Extraction
+ │
+ ▼
+Document Chunking
+ │
+ ▼
+Embeddings
+ │
+ ▼
+FAISS Vector Index
+ │
+ ▼
+Semantic Retrieval
+ │
+ ▼
+Groq LLM
+ │
+ ▼
+Grounded Response
+ │
+ ▼
+Source References
+```
 
-This makes the application particularly useful for interacting with:
-
-* Medical textbooks
-* Research papers
-* Clinical documents
-* Guidelines
-* Medical notes
-* Educational material
-* Other domain-specific PDF collections
-
-> **The goal is simple: make medical information easier to search, understand, and explore while keeping the generated response connected to the source material.**
+The result is a conversational experience where answers are generated using **retrieved information from the user's documents** rather than treating the LLM as the sole source of knowledge.
 
 ---
 
 # ✨ Why Medibot?
 
-Most chatbot interfaces hide the complexity of document processing behind a simple chat box.
+Medibot is designed around a simple idea:
 
-Medibot treats the entire workflow as a system.
+> **Medical documents should be searchable, conversational, and verifiable.**
 
-### 📄 Your Documents
+### 📄 Bring Your Own Knowledge
 
-Build a searchable knowledge base from your own medical PDFs.
-
-### ⚡ Asynchronous Ingestion
-
-Large documents are processed by background workers instead of blocking the API request.
+Upload medical PDFs and create a searchable knowledge base from your own documents.
 
 ### 🔎 Retrieval Before Generation
 
-The system retrieves relevant document chunks before asking the LLM to formulate an answer.
+Questions are answered using relevant retrieved document chunks before the LLM generates a response.
 
-### 📚 Source-Aware Answers
+### 📚 Source-Aware Responses
 
-Retrieved context can be associated with the original document and page information, making the response easier to verify.
+Relevant document and page information can be surfaced alongside generated answers, making the response easier to inspect.
 
-### 💬 Conversational Interface
+### ⚡ Asynchronous Processing
 
-Ask follow-up questions and maintain chat history rather than treating every question as an isolated request.
+PDF extraction, embedding, and FAISS indexing run through background workers rather than blocking the main API.
 
-### 📊 Production Observability
+### 💬 Conversational Experience
 
-Prometheus and Grafana provide the foundation for monitoring the running system.
+Continue conversations naturally with persistent chat history for authenticated users.
 
-### ☸️ Built to Scale
+### 🚀 Production-Oriented Architecture
 
-The architecture separates API traffic, ingestion workers, Redis queues, and persistent vector storage.
+The system is designed with independent API nodes, background workers, Redis queues, persistent storage, monitoring, containerization, and Kubernetes deployment in mind.
 
 ---
 
-# 🚀 Core Features
+# 🚀 Features
 
 <table>
 <tr>
 <td width="50%">
 
-### 📚 Document RAG
+## 📚 Document RAG
 
-Upload medical PDFs and transform them into a searchable semantic knowledge base.
+Upload medical PDFs and transform them into a semantic knowledge base.
 
 </td>
 <td width="50%">
 
-### 🔍 Semantic Retrieval
+## 🔎 Semantic Search
 
-FAISS retrieves document chunks that are semantically relevant to the user's question.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-### ⚙️ Background Processing
-
-Redis + RQ move expensive PDF ingestion and embedding workloads away from the API request path.
-
-</td>
-<td>
-
-### 🤖 Groq-powered Generation
-
-Retrieved context is passed to a Groq-hosted LLM to generate the final response.
+FAISS retrieves relevant chunks based on vector similarity.
 
 </td>
 </tr>
@@ -166,16 +150,16 @@ Retrieved context is passed to a Groq-hosted LLM to generate the final response.
 <tr>
 <td>
 
-### 📖 Source References
+## ⚙️ Async Ingestion
 
-Responses can be connected back to relevant document sources and pages.
+Redis/RQ workers handle document processing outside the API request path.
 
 </td>
 <td>
 
-### 💬 Chat History
+## 🤖 Groq Generation
 
-Authenticated users can retain and continue previous conversations.
+Retrieved context is passed to a Groq-hosted LLM for fast response generation.
 
 </td>
 </tr>
@@ -183,16 +167,33 @@ Authenticated users can retain and continue previous conversations.
 <tr>
 <td>
 
-### 🔐 Authentication
+## 📖 Page References
+
+Retrieved sources can be connected back to their originating documents and pages.
+
+</td>
+<td>
+
+## 💬 Chat History
+
+Authenticated users can persist and continue previous conversations.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+## 🔐 Authentication
 
 Email/password authentication with optional Google Sign-In.
 
 </td>
 <td>
 
-### 📊 Observability
+## 📊 Observability
 
-Prometheus metrics and Grafana dashboards for system monitoring.
+Prometheus metrics and Grafana dashboards provide operational visibility.
 
 </td>
 </tr>
@@ -200,16 +201,16 @@ Prometheus metrics and Grafana dashboards for system monitoring.
 <tr>
 <td>
 
-### 🐳 Containerized
+## 🐳 Docker
 
-Docker and Docker Compose support for reproducible environments.
+Run the complete application locally using Docker or Docker Compose.
 
 </td>
 <td>
 
-### ☁️ Cloud Ready
+## ☸️ Kubernetes
 
-Deploy to Hugging Face Spaces, Render, Railway, Kubernetes, or AWS EKS.
+Deploy independently scalable API, worker, Redis, frontend, and monitoring services.
 
 </td>
 </tr>
@@ -217,20 +218,23 @@ Deploy to Hugging Face Spaces, Render, Railway, Kubernetes, or AWS EKS.
 
 ---
 
-# 🧬 How Medibot Works
+# 🧠 RAG Pipeline
 
 ## 01 — Upload
 
-The user uploads a medical PDF through the React interface.
+The user uploads a medical PDF through the React frontend.
 
 ```text
-PDF
+User
+ │
+ ▼
+React
  │
  ▼
 FastAPI
 ```
 
-The API creates an ingestion job rather than performing the entire operation synchronously.
+The API creates an ingestion job instead of performing the complete indexing operation synchronously.
 
 ---
 
@@ -248,13 +252,13 @@ Redis Queue
 Ingestion Worker
 ```
 
-This prevents expensive document processing from blocking normal chat traffic.
+This keeps document processing separate from normal chat traffic.
 
 ---
 
 ## 03 — Extract
 
-The worker extracts text from the uploaded PDF and prepares it for retrieval.
+The worker extracts text from the uploaded document.
 
 ```text
 PDF
@@ -270,13 +274,13 @@ Document Chunks
 
 ## 04 — Embed
 
-Chunks are transformed into vector representations using:
+Each chunk is transformed into an embedding using FastEmbed.
+
+Default model:
 
 ```text
 BAAI/bge-small-en-v1.5
 ```
-
-through FastEmbed.
 
 ```text
 Document Chunk
@@ -292,7 +296,7 @@ Embedding Vector
 
 ## 05 — Index
 
-The embeddings are stored in a FAISS vector index.
+Embeddings are stored in a FAISS vector index.
 
 ```text
 Embedding Vectors
@@ -308,7 +312,7 @@ Searchable Knowledge Base
 
 ## 06 — Retrieve
 
-When the user asks a question, the query is embedded and compared against the vector index.
+When a user asks a question, the query is embedded and compared against the vector index.
 
 ```text
 User Question
@@ -330,39 +334,48 @@ Relevant Chunks
 The retrieved context is provided to the Groq-powered LLM.
 
 ```text
-User Question
-      +
-Retrieved Context
-      │
-      ▼
-   Groq LLM
-      │
-      ▼
-Grounded Response
+                  ┌──────────────────┐
+                  │   User Question  │
+                  └────────┬─────────┘
+                           │
+                           +
+                           │
+                  ┌────────▼─────────┐
+                  │ Retrieved Context│
+                  └────────┬─────────┘
+                           │
+                           ▼
+                     ┌───────────┐
+                     │  Groq LLM │
+                     └─────┬─────┘
+                           │
+                           ▼
+                    Grounded Answer
 ```
 
 ---
 
 ## 08 — Respond
 
-The answer is streamed back to the frontend, with source information available for verification.
+The response is streamed back to the frontend.
 
 ```text
-┌─────────────────────────────────┐
-│          AI Response            │
-│                                 │
-│  Grounded answer generated      │
-│  from retrieved medical text.   │
-│                                 │
-│  Sources:                       │
-│  📄 Document — Page X           │
-│  📄 Document — Page Y           │
-└─────────────────────────────────┘
+┌──────────────────────────────────┐
+│          AI RESPONSE             │
+│                                  │
+│  Generated using retrieved       │
+│  medical document context.       │
+│                                  │
+│  Sources                          │
+│  ──────────────────────────────  │
+│  📄 Document — Page X            │
+│  📄 Document — Page Y            │
+└──────────────────────────────────┘
 ```
 
 ---
 
-# 🏗️ System Architecture
+# 🏗️ Architecture
 
 ```mermaid
 flowchart TB
@@ -373,7 +386,7 @@ flowchart TB
 
     API["⚡ FastAPI"]
 
-    AUTH["🔐 Auth Service"]
+    AUTH["🔐 Authentication"]
 
     DB[("🐘 PostgreSQL")]
 
@@ -415,85 +428,80 @@ flowchart TB
 
 ---
 
-# ⚡ The Important Architectural Decision
+# ⚡ A Key Design Decision
 
 The ingestion pipeline is intentionally **decoupled from the chat API**.
 
-A naïve implementation might do:
+A simpler implementation could process everything inside the upload request:
 
 ```text
-Upload PDF
-     │
-     ▼
+Upload
+  │
+  ▼
 Extract
-     │
-     ▼
+  │
+  ▼
 Embed
-     │
-     ▼
+  │
+  ▼
 Build FAISS
-     │
-     ▼
-Return response
+  │
+  ▼
+Return
 ```
 
-This means a large document can keep an API request busy for a long time.
+This can become problematic when processing large documents.
 
 Medibot instead uses:
 
 ```text
-                ┌───────────────┐
-                │   PDF Upload  │
-                └───────┬───────┘
+                    PDF Upload
+                        │
+                        ▼
+                  ┌───────────┐
+                  │  FastAPI  │
+                  └─────┬─────┘
+                        │
+                        ▼
+                  ┌───────────┐
+                  │   Redis   │
+                  │   Queue   │
+                  └─────┬─────┘
                         │
                         ▼
                 ┌───────────────┐
-                │  FastAPI API  │
+                │ Ingest Worker │
                 └───────┬───────┘
                         │
                         ▼
-                 ┌────────────┐
-                 │   Redis    │
-                 │    Queue   │
-                 └─────┬──────┘
-                       │
-                       ▼
-               ┌───────────────┐
-               │ Ingest Worker │
-               └───────┬───────┘
-                       │
-                       ▼
-               ┌───────────────┐
-               │ PDF → Embed   │
-               │ → FAISS       │
-               └───────────────┘
+              PDF → Embed → FAISS
 ```
 
-This separation allows the API layer and ingestion layer to scale independently.
+This allows the system to scale **chat traffic and document processing independently**.
 
 ---
 
 # 🧩 Technology Stack
 
-| Layer           | Technology        | Role                               |
-| --------------- | ----------------- | ---------------------------------- |
-| Frontend        | React + Vite      | Chat and document UI               |
-| API             | FastAPI           | Application API                    |
-| RAG             | LangChain         | Retrieval/generation orchestration |
-| Vector Search   | FAISS             | Semantic similarity search         |
-| Embeddings      | FastEmbed         | Local embedding generation         |
-| Embedding Model | BGE-small-en-v1.5 | Document/query embeddings          |
-| LLM             | Groq              | Response generation                |
-| Queue           | Redis             | Job dispatch                       |
-| Workers         | RQ                | Background ingestion               |
-| Auth DB         | PostgreSQL        | Production accounts/history        |
-| Local Auth      | SQLite            | Development fallback               |
-| Containers      | Docker            | Packaging                          |
-| Orchestration   | Kubernetes        | Production deployment              |
-| Monitoring      | Prometheus        | Metrics                            |
-| Dashboards      | Grafana           | Observability                      |
-| CI/CD           | GitLab CI/CD      | Build and deployment               |
-| Cloud           | AWS EKS           | Kubernetes production environment  |
+| Layer           | Technology               | Purpose                            |
+| --------------- | ------------------------ | ---------------------------------- |
+| Frontend        | React + Vite             | Web application                    |
+| API             | FastAPI                  | Backend API                        |
+| RAG             | LangChain                | Retrieval/generation orchestration |
+| Vector Search   | FAISS                    | Semantic similarity search         |
+| Embeddings      | FastEmbed                | Local embedding generation         |
+| Embedding Model | `BAAI/bge-small-en-v1.5` | Text embeddings                    |
+| LLM             | Groq                     | Response generation                |
+| Queue           | Redis                    | Job dispatch                       |
+| Workers         | RQ                       | Background ingestion               |
+| Database        | PostgreSQL               | Production accounts/history        |
+| Local Database  | SQLite                   | Development fallback               |
+| Containers      | Docker                   | Application packaging              |
+| Orchestration   | Kubernetes               | Production deployment              |
+| Monitoring      | Prometheus               | Metrics                            |
+| Dashboards      | Grafana                  | Observability                      |
+| CI/CD           | GitLab CI/CD             | Build and deployment               |
+| Cloud           | AWS EKS                  | Production Kubernetes              |
 
 ---
 
@@ -538,22 +546,10 @@ medical-chatbot/
 ├── Dockerfile
 ├── render.yaml
 ├── .gitlab-ci.yml
+├── pitch.mp4
+├── pitch_samples.png
 └── README.md
 ```
-
-| Directory / File           | Purpose                                    |
-| -------------------------- | ------------------------------------------ |
-| `backend/`                 | FastAPI, authentication, RAG and ingestion |
-| `backend/ingest_worker.py` | Background ingestion worker                |
-| `backend/job_store.py`     | Upload job state                           |
-| `frontend/`                | React application                          |
-| `docker/`                  | Production Dockerfiles                     |
-| `k8s/`                     | Kubernetes manifests                       |
-| `testing/`                 | Tests and evaluation reports               |
-| `ops/`                     | Production documentation                   |
-| `docker-compose.yml`       | Complete local stack                       |
-| `render.yaml`              | Render deployment configuration            |
-| `.gitlab-ci.yml`           | GitLab CI/CD pipeline                      |
 
 ---
 
@@ -561,10 +557,12 @@ medical-chatbot/
 
 ## Prerequisites
 
+You will need:
+
 * Python **3.11 or 3.12**
 * Node.js
 * Docker
-* A Groq API key
+* Groq API key
 
 ---
 
@@ -577,7 +575,7 @@ cd medical-chatbot
 
 ---
 
-## 2. Configure environment
+## 2. Configure the backend
 
 Create:
 
@@ -591,7 +589,7 @@ Minimum configuration:
 GROQ_API_KEYS=your_groq_api_key
 ```
 
-Recommended production configuration:
+For production authentication:
 
 ```env
 AUTH_SECRET=your_secure_secret
@@ -600,11 +598,11 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GROQ_API_KEYS=key1,key2
 ```
 
-> 🔒 Never commit `.env` files or real API keys.
+> 🔒 Never commit `.env` files or real credentials.
 
 ---
 
-## 3. Install backend
+## 3. Install backend dependencies
 
 Create a virtual environment:
 
@@ -624,7 +622,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-Install dependencies:
+Install:
 
 ```bash
 pip install -r backend/requirements.txt
@@ -632,7 +630,7 @@ pip install -r backend/requirements.txt
 
 ---
 
-## 4. Install frontend
+## 4. Install frontend dependencies
 
 ```bash
 cd frontend
@@ -643,7 +641,7 @@ cd ..
 
 ---
 
-## 5. Start API
+## 5. Start the API
 
 ```bash
 uvicorn backend.main:app \
@@ -653,22 +651,17 @@ uvicorn backend.main:app \
 
 Open:
 
-```text
-Application
-http://localhost:8000/
-
-Health
-http://localhost:8000/api/health
-
-Metrics
-http://localhost:8000/metrics
-```
+| Service        | URL                                |
+| -------------- | ---------------------------------- |
+| 🩺 Application | `http://localhost:8000/`           |
+| ❤️ Health      | `http://localhost:8000/api/health` |
+| 📊 Metrics     | `http://localhost:8000/metrics`    |
 
 ---
 
 # 🐳 Docker
 
-Build:
+Build the application:
 
 ```bash
 docker build -t medical-chatbot .
@@ -685,9 +678,9 @@ docker run \
 
 ---
 
-# 🐳 Docker Compose
+# 🐳 Full Local Stack
 
-For the complete local product stack:
+For the complete multi-service environment:
 
 ```bash
 docker compose up --build
@@ -707,12 +700,12 @@ This starts:
                          │    :8000     │
                          └──────┬───────┘
                                 │
-              ┌─────────────────┼─────────────────┐
-              │                 │                 │
-              ▼                 ▼                 ▼
-          Backend 1         Backend 2         Backend 3
-              │                 │                 │
-              └─────────────────┼─────────────────┘
+                ┌───────────────┼───────────────┐
+                │               │               │
+                ▼               ▼               ▼
+           Backend 1       Backend 2       Backend 3
+                │               │               │
+                └───────────────┼───────────────┘
                                 │
                                 ▼
                          ┌──────────────┐
@@ -732,31 +725,31 @@ This starts:
 
 ### Services
 
-| Service         |     Port | Purpose         |
-| --------------- | -------: | --------------- |
-| Backend gateway |   `8000` | API             |
-| Frontend        |   `8080` | Web application |
-| Prometheus      |   `9090` | Metrics         |
-| Grafana         |   `3000` | Monitoring      |
-| Redis           | Internal | Queue           |
-| Ingest worker   | Internal | PDF processing  |
+| Service         |     Port | Purpose        |
+| --------------- | -------: | -------------- |
+| Backend gateway |   `8000` | API            |
+| Frontend        |   `8080` | Web UI         |
+| Prometheus      |   `9090` | Metrics        |
+| Grafana         |   `3000` | Monitoring     |
+| Redis           | Internal | Job queue      |
+| Ingest worker   | Internal | PDF processing |
 
 ### Grafana
 
 Default local credentials:
 
 ```text
-username: admin
-password: admin
+Username: admin
+Password: admin
 ```
 
-Change these before exposing Grafana outside a trusted environment.
+Change these before exposing Grafana externally.
 
 ---
 
 # 🔀 Alternate Ports
 
-If port `8000` is occupied:
+If port `8000` is already occupied:
 
 ```bash
 docker compose \
@@ -765,7 +758,7 @@ docker compose \
   up --build
 ```
 
-This maps:
+This exposes:
 
 ```text
 Backend   → http://localhost:8010
@@ -783,7 +776,7 @@ GRAFANA_HOST_PORT=
 
 # ⚙️ Ingestion Configuration
 
-Recommended local settings:
+Recommended local indexing settings:
 
 ```env
 EMBED_BATCH_SIZE=32
@@ -801,21 +794,21 @@ RAG_MAX_PDF_PAGES=80
 
 ---
 
-# 🧪 Testing
+# 🧪 Testing & Evaluation
 
-Tests and generated reports live under:
+Tests and generated reports are located under:
 
 ```text
 testing/
 ```
 
-Run the API tests:
+Run the API test suite:
 
 ```bash
 python -m unittest testing.tests.test_api
 ```
 
-LLM evaluation reports are generated under:
+LLM evaluation reports are written to:
 
 ```text
 testing/reports/evaluations/
@@ -831,53 +824,51 @@ The testing layer provides a foundation for:
 
 ---
 
-# 🔌 API
+# 🔌 API Reference
 
 ## Health & Observability
 
-| Method | Endpoint      |
-| ------ | ------------- |
-| `GET`  | `/api/health` |
-| `GET`  | `/metrics`    |
+| Method | Endpoint      | Description        |
+| ------ | ------------- | ------------------ |
+| `GET`  | `/api/health` | Application health |
+| `GET`  | `/metrics`    | Prometheus metrics |
 
 ## Authentication
 
-| Method | Endpoint             |
-| ------ | -------------------- |
-| `GET`  | `/api/auth/config`   |
-| `POST` | `/api/auth/register` |
-| `POST` | `/api/auth/login`    |
-| `POST` | `/api/auth/google`   |
-| `GET`  | `/api/auth/me`       |
+| Method | Endpoint             | Description                  |
+| ------ | -------------------- | ---------------------------- |
+| `GET`  | `/api/auth/config`   | Authentication configuration |
+| `POST` | `/api/auth/register` | Register                     |
+| `POST` | `/api/auth/login`    | Login                        |
+| `POST` | `/api/auth/google`   | Google Sign-In               |
+| `GET`  | `/api/auth/me`       | Current user                 |
 
 ## Chat
 
-| Method | Endpoint            |
-| ------ | ------------------- |
-| `GET`  | `/api/chat-history` |
-| `PUT`  | `/api/chat-history` |
-| `POST` | `/api/ask`          |
-| `POST` | `/api/ask/stream`   |
+| Method | Endpoint            | Description           |
+| ------ | ------------------- | --------------------- |
+| `GET`  | `/api/chat-history` | Retrieve chat history |
+| `PUT`  | `/api/chat-history` | Update chat history   |
+| `POST` | `/api/ask`          | Ask a question        |
+| `POST` | `/api/ask/stream`   | Stream an answer      |
 
 ## Documents
 
-| Method   | Endpoint                      |
-| -------- | ----------------------------- |
-| `POST`   | `/api/upload`                 |
-| `GET`    | `/api/upload/status/{job_id}` |
-| `POST`   | `/api/upload/cancel/{job_id}` |
-| `DELETE` | `/api/upload/{job_id}`        |
-| `GET`    | `/api/source/{doc_id}`        |
+| Method   | Endpoint                      | Description              |
+| -------- | ----------------------------- | ------------------------ |
+| `POST`   | `/api/upload`                 | Upload PDF               |
+| `GET`    | `/api/upload/status/{job_id}` | Check ingestion status   |
+| `POST`   | `/api/upload/cancel/{job_id}` | Cancel ingestion         |
+| `DELETE` | `/api/upload/{job_id}`        | Delete uploaded document |
+| `GET`    | `/api/source/{doc_id}`        | Retrieve source document |
 
 ---
 
 # 🔐 Authentication
 
-Medibot supports:
+Medibot supports email/password authentication locally and optionally Google Sign-In.
 
-### Local development
-
-Email/password authentication works without an external provider.
+## Local Development
 
 If `AUTH_DATABASE_URL` is not configured, the backend falls back to:
 
@@ -885,9 +876,9 @@ If `AUTH_DATABASE_URL` is not configured, the backend falls back to:
 backend/data/medibot_auth.sqlite3
 ```
 
-### Production
+## Production
 
-Use PostgreSQL:
+Configure PostgreSQL:
 
 ```env
 AUTH_DATABASE_URL=postgresql://...
@@ -901,27 +892,25 @@ AUTH_DATABASE_URL=<postgresql-connection-string>
 GOOGLE_CLIENT_ID=<google-client-id>
 ```
 
-Google Sign-In is enabled when `GOOGLE_CLIENT_ID` is configured.
-
 ---
 
 # 🧠 Model Configuration
 
-### Embeddings
+## Embeddings
 
-Default:
+Default model:
 
 ```text
 BAAI/bge-small-en-v1.5
 ```
 
-Configure with:
+Configure:
 
 ```env
 EMBED_MODEL=BAAI/bge-small-en-v1.5
 ```
 
-### Groq
+## Groq
 
 Default model:
 
@@ -954,25 +943,25 @@ Prometheus
  Grafana
 ```
 
-This provides visibility into application and infrastructure behavior and creates a foundation for:
+This provides a foundation for monitoring:
 
-* performance monitoring
-* ingestion monitoring
-* API monitoring
-* operational debugging
-* capacity planning
-* regression detection
+* API behavior
+* ingestion workloads
+* application performance
+* system health
+* operational regressions
+* capacity
 
 ---
 
 # ☸️ Kubernetes
 
-The Kubernetes configuration separates:
+The Kubernetes deployment separates the major components:
 
 ```text
 Frontend
 Backend API
-Ingestion Worker
+Ingestion Workers
 Redis
 Prometheus
 Grafana
@@ -980,7 +969,7 @@ Ingress
 Autoscaling
 ```
 
-Apply the base configuration:
+Deploy:
 
 ```bash
 kubectl apply -k k8s
@@ -1014,28 +1003,20 @@ kubectl apply -k k8s/overlays/local
 
 ### Port forwarding
 
-Frontend:
-
 ```bash
 kubectl -n medical-chatbot \
   port-forward svc/frontend 8080:80
 ```
-
-Backend:
 
 ```bash
 kubectl -n medical-chatbot \
   port-forward svc/backend 8000:8000
 ```
 
-Prometheus:
-
 ```bash
 kubectl -n medical-chatbot \
   port-forward svc/prometheus 9090:9090
 ```
-
-Grafana:
 
 ```bash
 kubectl -n medical-chatbot \
@@ -1046,26 +1027,26 @@ kubectl -n medical-chatbot \
 
 # ☁️ AWS EKS
 
-The production Kubernetes architecture is designed around AWS EKS.
+The production Kubernetes architecture is designed to support AWS EKS.
 
-For shared PDFs and FAISS vectorstores, the `ReadWriteMany` PVCs should use **EFS or another appropriate RWX-compatible storage class**.
+For shared uploaded PDFs and FAISS indexes, `ReadWriteMany` PVCs should use **EFS or another appropriate RWX-compatible storage class**.
 
 ```text
-                     AWS EKS
-                        │
-       ┌────────────────┼────────────────┐
-       │                │                │
-       ▼                ▼                ▼
-   Frontend          Backend         Workers
-                        │                │
-                        ▼                ▼
-                      Redis        Shared Storage
-                                         │
-                                         ▼
-                                      FAISS
+                       AWS EKS
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+      Frontend         Backend          Workers
+                          │               │
+                          ▼               ▼
+                        Redis       Shared Storage
+                                          │
+                                          ▼
+                                        FAISS
 ```
 
-Optional Prometheus Operator resources are available under:
+Optional Prometheus Operator resources are available at:
 
 ```text
 k8s/overlays/operator-monitoring
@@ -1075,36 +1056,31 @@ k8s/overlays/operator-monitoring
 
 # 🔁 GitLab CI/CD
 
-The repository includes a GitLab-first deployment pipeline.
+The repository includes a GitLab-first CI/CD pipeline.
 
 ```text
-             Git Push
-                │
-                ▼
-        ┌───────────────┐
-        │ Test / Compile│
-        └───────┬───────┘
-                ▼
-        ┌───────────────┐
-        │ Frontend Build│
-        └───────┬───────┘
-                ▼
-        ┌───────────────┐
-        │ Docker Build  │
-        └───────┬───────┘
-                ▼
-        ┌───────────────┐
-        │ GitLab Registry│
-        └───────┬───────┘
-                ▼
-        ┌───────────────┐
-        │ Manual Deploy │
-        └───────┬───────┘
-                ▼
-              AWS EKS
+Git Push
+   │
+   ▼
+Test / Compile
+   │
+   ▼
+Frontend Build
+   │
+   ▼
+Docker Build
+   │
+   ▼
+GitLab Container Registry
+   │
+   ▼
+Manual Deployment
+   │
+   ▼
+AWS EKS
 ```
 
-Pipeline responsibilities:
+### Pipeline
 
 1. Install backend dependencies
 2. Run `python -m compileall backend`
@@ -1112,10 +1088,10 @@ Pipeline responsibilities:
 4. Run `npm run build`
 5. Build backend image
 6. Build frontend image
-7. Push images to GitLab Container Registry
+7. Push both images
 8. Optionally deploy to EKS
 
-Required variables:
+### Required GitLab variables
 
 ```text
 AWS_ACCESS_KEY_ID
@@ -1134,51 +1110,58 @@ CI_REGISTRY_PASSWORD
 CI_REGISTRY_IMAGE
 ```
 
+The deployment job creates or updates:
+
+```text
+gitlab-registry
+medical-chatbot-secrets
+```
+
+and applies:
+
+```bash
+kubectl apply -k k8s
+```
+
 ---
 
 # 🤗 Hugging Face Spaces
 
-Medibot can run as a Docker Space.
+Medibot is configured to run as a Docker Space.
 
-### Setup
+## Setup
 
 1. Create a new Hugging Face Space.
 2. Select **Docker**.
 3. Upload or connect this repository.
-4. Add:
+4. Add the secret:
 
 ```text
 GROQ_API_KEYS
 ```
 
-as a Space secret.
-
 5. Push the repository.
-6. Wait for the Docker build.
+6. Wait for the Space to build.
 
-The application is exposed on:
+The application is exposed on port:
 
 ```text
 8000
 ```
 
-### ⚠️ Free-tier limitation
+### ⚠️ Free-tier storage
 
 The free CPU environment uses ephemeral storage.
 
-This means the following may disappear after rebuilds or restarts:
-
-```text
-Uploaded PDFs
-Embedding caches
-FAISS indexes
-```
+Uploaded PDFs, embedding caches, and FAISS indexes may be lost after restarts or rebuilds.
 
 Hugging Face Spaces is therefore best suited for:
 
-**Demos · Prototypes · Experiments · Evaluation**
+```text
+Demos · Prototypes · Experiments · Evaluation
+```
 
-rather than durable production document storage.
+rather than persistent production document storage.
 
 ---
 
@@ -1192,9 +1175,9 @@ render.yaml
 
 and can be deployed as a Docker web service.
 
-### Deployment
+## Setup
 
-1. Push the repository to your Git provider.
+1. Push the repository to your connected Git provider.
 2. Create a Render Blueprint.
 3. Point it to the repository.
 4. Configure:
@@ -1205,7 +1188,7 @@ GROQ_API_KEYS
 
 5. Deploy.
 
-Recommended configuration:
+Recommended values:
 
 ```env
 DB_FAISS_BASE=/tmp/vectorstore
@@ -1225,7 +1208,7 @@ Health endpoint:
 
 Free Render instances may spin down when idle and use ephemeral storage.
 
-For persistent vector storage, use a paid plan with a disk:
+For persistent storage on a paid instance:
 
 ```env
 DB_FAISS_BASE=/data/vectorstore
@@ -1247,7 +1230,7 @@ Initialize:
 npx @railway/cli init --name Medical_chatbot
 ```
 
-Link:
+Link the service:
 
 ```bash
 npx @railway/cli service link backend
@@ -1280,7 +1263,7 @@ EMBED_BATCH_SIZE=4
 RAG_MAX_PDF_PAGES=80
 ```
 
-Add a persistent volume:
+Add persistent storage:
 
 ```bash
 npx @railway/cli volume add
@@ -1292,7 +1275,7 @@ Mount:
 /data
 ```
 
-Then:
+Set:
 
 ```bash
 npx @railway/cli variable set \
@@ -1309,13 +1292,13 @@ npx @railway/cli up --service backend
 
 ---
 
-# 📦 Deployment Matrix
+# 📦 Deployment Options
 
-| Platform          | Best Use            | Persistent Storage | Complexity |
+| Platform          | Best For            | Persistent Storage | Complexity |
 | ----------------- | ------------------- | -----------------: | ---------: |
 | 🐳 Docker         | Development         |                  ✅ |        Low |
 | 🐳 Docker Compose | Full local stack    |                  ✅ |        Low |
-| 🤗 Hugging Face   | Demo                |        ❌ Free tier |        Low |
+| 🤗 Hugging Face   | Demo / prototype    |        ❌ Free tier |        Low |
 | 🚀 Render         | Simple deployment   |  ⚠️ Plan dependent |        Low |
 | 🚂 Railway        | Small production    |      ✅ With volume |        Low |
 | ☸️ Kubernetes     | Production          |                  ✅ |       High |
@@ -1323,7 +1306,7 @@ npx @railway/cli up --service backend
 
 ---
 
-# ⚙️ Environment Variables
+# 🔧 Environment Variables
 
 ```env
 # ─────────────────────────────
@@ -1383,7 +1366,7 @@ GRAFANA_HOST_PORT=
 <details>
 <summary><strong>❌ Render deployment fails because of large local files</strong></summary>
 
-Make sure generated runtime data is not committed:
+Ensure generated runtime directories are not committed:
 
 ```text
 backend/data/
@@ -1412,7 +1395,7 @@ instead.
 
 Check that:
 
-1. A PDF has been uploaded.
+1. At least one PDF has been uploaded.
 2. Ingestion has completed.
 3. The vectorstore exists.
 4. `DB_FAISS_BASE` points to the correct location.
@@ -1420,7 +1403,7 @@ Check that:
 </details>
 
 <details>
-<summary><strong>❌ Frontend is blank</strong></summary>
+<summary><strong>❌ Frontend loads but is blank</strong></summary>
 
 Check that static assets are being served from:
 
@@ -1455,9 +1438,9 @@ Start with smaller PDFs on memory-constrained instances.
 
 # 🔒 Security
 
-Medical information requires careful treatment.
+Medical information requires careful handling.
 
-### Never commit
+Never commit:
 
 ```text
 .env
@@ -1467,10 +1450,10 @@ Private credentials
 Production secrets
 ```
 
-If a credential is leaked:
+If a credential is exposed:
 
-1. Revoke it.
-2. Rotate it.
+1. Revoke it immediately.
+2. Rotate the credential.
 3. Update deployment secrets.
 4. Review repository history if necessary.
 
@@ -1482,9 +1465,64 @@ For production environments, consider:
 * secret management
 * restricted Kubernetes permissions
 * protected monitoring endpoints
-* persistent and controlled document storage
+* controlled document storage
 * appropriate access controls
 * audit logging
+
+---
+
+# 📈 Scaling Philosophy
+
+Medibot separates **chat traffic** from **document ingestion**.
+
+```text
+                    MEDIBOT
+                       │
+          ┌────────────┴────────────┐
+          │                         │
+          ▼                         ▼
+      CHAT PATH               INGESTION PATH
+          │                         │
+          ▼                         ▼
+       FastAPI                    Redis
+          │                         │
+          ▼                         ▼
+        Groq                  RQ Workers
+                                    │
+                                    ▼
+                           PDF + Embeddings
+                                    │
+                                    ▼
+                                  FAISS
+```
+
+This architecture allows:
+
+```text
+API replicas        → scale independently
+Ingestion workers   → scale independently
+Redis               → decouple workloads
+Vector storage      → persist knowledge
+Monitoring          → observe the system
+```
+
+---
+
+# 🗺️ Roadmap
+
+* [ ] Multi-document collections
+* [ ] Document-level access control
+* [ ] Advanced retrieval reranking
+* [ ] Hybrid lexical + semantic search
+* [ ] Improved citation verification
+* [ ] Streaming retrieval events
+* [ ] Document management interface
+* [ ] RAG evaluation dashboards
+* [ ] Automated RAG quality benchmarks
+* [ ] Persistent object storage
+* [ ] Advanced observability
+* [ ] Fine-grained user permissions
+* [ ] Production-grade secret management
 
 ---
 
@@ -1506,64 +1544,11 @@ Any real-world clinical deployment would require appropriate **clinical validati
 
 ---
 
-# 📈 Scaling Philosophy
-
-Medibot is designed around one important principle:
-
-> **Chat traffic and document processing should not compete for the same resources.**
-
-The system therefore separates:
-
-```text
-                    MEDIBOT
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-          ▼                         ▼
-     CHAT PATH                 INGESTION PATH
-          │                         │
-          ▼                         ▼
-      FastAPI                    Redis
-          │                         │
-          ▼                         ▼
-       Groq                    RQ Worker
-                                    │
-                                    ▼
-                             PDF + Embeddings
-                                    │
-                                    ▼
-                                  FAISS
-```
-
-This makes it possible to scale API replicas and ingestion workers independently.
-
----
-
-# 🗺️ Roadmap
-
-Potential future improvements include:
-
-* [ ] Improved document-level access control
-* [ ] Multi-document collections
-* [ ] Advanced reranking
-* [ ] Hybrid lexical + semantic retrieval
-* [ ] Better citation verification
-* [ ] Streaming retrieval events
-* [ ] Document management UI
-* [ ] Evaluation dashboards
-* [ ] Automated RAG quality benchmarks
-* [ ] Persistent object storage
-* [ ] Advanced observability
-* [ ] Fine-grained user permissions
-* [ ] Production-grade secret management
-
----
-
 # 🤝 Contributing
 
 Contributions, bug reports, evaluation improvements, and architecture suggestions are welcome.
 
-Create a branch:
+Create a feature branch:
 
 ```bash
 git checkout -b feature/my-improvement
@@ -1588,13 +1573,13 @@ Then open a pull request.
 
 # 📚 Production Documentation
 
-For the complete production deployment reference:
+For the complete production deployment and operations guide:
 
 ```text
 ops/production-guide.md
 ```
 
-The production guide covers:
+It covers:
 
 * CI/CD
 * Kubernetes
@@ -1646,14 +1631,14 @@ SOFTWARE.
 
 ### Upload. Retrieve. Reason. Verify.
 
-**Medical document intelligence powered by RAG.**
+**Medical document intelligence powered by Retrieval-Augmented Generation.**
 
-<br />
+<br/>
 
-⭐ **If Medibot is useful to you, consider giving the repository a star.**
+**FastAPI · React · FAISS · FastEmbed · Groq · Redis · Kubernetes**
 
-<br />
+<br/>
 
-Built with **FastAPI · React · FAISS · FastEmbed · Groq · Redis · Kubernetes**
+⭐ **If you find Medibot useful, consider giving the repository a star.**
 
 </div>
