@@ -35,15 +35,13 @@ Medical Chatbot: AI-powered medical document intelligence with grounded RAG.
 
 <div align="center">
 
-<a href="pitch.mp4">
+<a href="pitch.gif">
 
 <img src="pitch_samples.png" alt="Medibot pitch and product demo" width="900"/>
 
 </a>
 
 <br/>
-
-**▶ Click the preview above to watch the pitch & product demo**
 
 </div>
 
