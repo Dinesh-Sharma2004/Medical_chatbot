@@ -47,12 +47,12 @@ PDF → Text Extraction → Chunking → Embeddings
 
 ### Why Medibot?
 
-- 📄 **Bring your own knowledge** — upload medical PDFs and create a searchable knowledge base.
-- 🔎 **Retrieval before generation** — relevant document chunks are retrieved before generation.
-- 📚 **Source-aware responses** — document and page information can be surfaced with answers.
-- ⚡ **Asynchronous ingestion** — extraction, embedding, and indexing run through background workers.
-- 💬 **Conversational experience** — authenticated users can persist chat history.
-- 🚀 **Production-oriented architecture** — API, workers, queues, storage, monitoring, containers, and Kubernetes are separated.
+-  **Bring your own knowledge** — upload medical PDFs and create a searchable knowledge base.
+-  **Retrieval before generation** — relevant document chunks are retrieved before generation.
+-  **Source-aware responses** — document and page information can be surfaced with answers.
+-  **Asynchronous ingestion** — extraction, embedding, and indexing run through background workers.
+-  **Conversational experience** — authenticated users can persist chat history.
+-  **Production-oriented architecture** — API, workers, queues, storage, monitoring, containers, and Kubernetes are separated.
 
 ---
 
@@ -60,16 +60,16 @@ PDF → Text Extraction → Chunking → Embeddings
 
 | Feature | Description |
 |---|---|
-| 📚 Document RAG | Upload medical PDFs and transform them into a semantic knowledge base. |
-| 🔎 Semantic Search | FAISS retrieves relevant chunks using vector similarity. |
-| ⚙️ Async Ingestion | Redis/RQ workers process documents outside the API request path. |
-| 🤖 Groq Generation | Retrieved context is passed to a Groq-hosted LLM. |
-| 📖 Page References | Retrieved sources can be connected to originating documents and pages. |
-| 💬 Chat History | Authenticated users can persist and continue conversations. |
-| 🔐 Authentication | Email/password authentication with optional Google Sign-In. |
-| 📊 Observability | Prometheus metrics and Grafana dashboards provide operational visibility. |
-| 🐳 Docker | Run the application locally with Docker or Docker Compose. |
-| ☸️ Kubernetes | Deploy independently scalable API, worker, Redis, frontend, and monitoring services. |
+| Document RAG | Upload medical PDFs and transform them into a semantic knowledge base. |
+| Semantic Search | FAISS retrieves relevant chunks using vector similarity. |
+| Async Ingestion | Redis/RQ workers process documents outside the API request path. |
+| Groq Generation | Retrieved context is passed to a Groq-hosted LLM. |
+| Page References | Retrieved sources can be connected to originating documents and pages. |
+| Chat History | Authenticated users can persist and continue conversations. |
+| Authentication | Email/password authentication with optional Google Sign-In. |
+| Observability | Prometheus metrics and Grafana dashboards provide operational visibility. |
+| Docker | Run the application locally with Docker or Docker Compose. |
+| Kubernetes | Deploy independently scalable API, worker, Redis, frontend, and monitoring services. |
 
 ---
 
@@ -152,7 +152,7 @@ GROQ_API_KEYS=your_groq_api_key
 
 For production authentication, see [`docs/configuration.md`](docs/configuration.md).
 
-> 🔒 Never commit `.env` files or real credentials.
+>  Never commit `.env` files or real credentials.
 
 ### 3. Install backend dependencies
 
@@ -191,9 +191,9 @@ uvicorn backend.main:app   --host 0.0.0.0   --port 8000
 
 | Service | URL |
 |---|---|
-| 🩺 Application | `http://localhost:8000/` |
-| ❤️ Health | `http://localhost:8000/api/health` |
-| 📊 Metrics | `http://localhost:8000/metrics` |
+|  Application | `http://localhost:8000/` |
+|  Health | `http://localhost:8000/api/health` |
+|  Metrics | `http://localhost:8000/metrics` |
 
 For Docker, environment variables, model settings, and the full local stack, see [`docs/development.md`](docs/development.md).
 
@@ -247,13 +247,13 @@ See [`docs/rag-pipeline.md`](docs/rag-pipeline.md) for the complete pipeline.
 
 | Platform | Best For | Persistent Storage | Complexity |
 |---|---|---:|---:|
-| 🐳 Docker | Development | ✅ | Low |
-| 🐳 Docker Compose | Full local stack | ✅ | Low |
-| 🤗 Hugging Face | Demo / prototype | ❌ Free tier | Low |
-| 🚀 Render | Simple deployment | ⚠️ Plan dependent | Low |
-| 🚂 Railway | Small production | ✅ With volume | Low |
-| ☸️ Kubernetes | Production | ✅ | High |
-| ☁️ AWS EKS | Scalable production | ✅ | High |
+|  Docker | Development | ✅ | Low |
+|  Docker Compose | Full local stack | ✅ | Low |
+|  Hugging Face | Demo / prototype | ❌ Free tier | Low |
+|  Render | Simple deployment | ⚠️ Plan dependent | Low |
+|  Railway | Small production | ✅ With volume | Low |
+|  Kubernetes | Production | ✅ | High |
+|  AWS EKS | Scalable production | ✅ | High |
 
 Deployment instructions are in [`docs/deployment.md`](docs/deployment.md).
 
