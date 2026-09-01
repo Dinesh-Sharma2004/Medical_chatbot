@@ -105,6 +105,12 @@ FAISS Similarity Search
       │
       ▼
 Relevant Chunks
+      │
+      ▼
+Hybrid Reranking (BM25 and Dense Retrieval)
+      │
+      ▼
+Top 6 documents
 ```
 
 ---
