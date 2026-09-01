@@ -216,9 +216,11 @@ FAISS
   ↓
 Semantic Retrieval
   ↓
+Hybrid Reranking (BM25 + Dense Retrieval)
+  ↓
 Groq LLM
   ↓
-Grounded Answer + Sources
+Grounded Answer + Sourced Page Numbers
 ```
 
 See [`docs/rag-pipeline.md`](docs/rag-pipeline.md) for the complete pipeline.
